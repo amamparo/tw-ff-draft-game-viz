@@ -8,6 +8,7 @@
   let chartCanvas;
   let chart;
   let loading = true;
+  let loadingMessage = 'Loading configuration...';
   let error = null;
   let config = null;
   let chartData = null;
@@ -21,13 +22,16 @@
   async function loadStockData() {
     try {
       // Load configuration
+      loadingMessage = 'Loading configuration...';
       config = await loadConfig();
       
       // Fetch stock data
+      loadingMessage = `Fetching data for ${config.stockSymbols.length} symbols...`;
       const stockData = await fetchStockData(config.stockSymbols, config.startDate);
       const performanceData = calculatePerformance(stockData);
       
       // Prepare chart data
+      loadingMessage = 'Preparing chart...';
       const dates = stockData[config.stockSymbols[0]]?.map(point => point.date) || [];
       
       const datasets = config.stockSymbols.map((symbol, index) => ({
@@ -77,10 +81,14 @@
           x: {
             title: {
               display: true,
-              text: 'Date'
+              text: 'Time'
             },
             ticks: {
-              maxTicksLimit: 10
+              maxTicksLimit: 15,
+              callback: function(value, index, ticks) {
+                const date = new Date(this.getLabelForValue(value));
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+              }
             }
           }
         },
@@ -129,7 +137,7 @@
 
 <div class="chart-container">
   {#if loading}
-    <div class="loading">Loading stock data...</div>
+    <div class="loading">{loadingMessage}</div>
   {:else if error}
     <div class="error">Error: {error}</div>
   {:else}
