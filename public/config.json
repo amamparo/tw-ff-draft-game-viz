@@ -1,15 +1,65 @@
 {
-  "stockSymbols": [
-    "AAPL",
-    "MSFT",
-    "GOOGL",
-    "AMZN",
-    "TSLA",
-    "NVDA",
-    "META",
-    "NFLX",
-    "AMD",
-    "CRM"
+  "entrants": [
+    {
+      "name": "Devin",
+      "symbol": "DVN",
+      "position": "long"
+    },
+    {
+      "name": "Max",
+      "symbol": "DJIA",
+      "position": "long"
+    },
+    {
+      "name": "David S",
+      "symbol": "ETHA",
+      "position": "long"
+    },
+    {
+      "name": "David G",
+      "symbol": "TEM",
+      "position": "long"
+    },
+    {
+      "name": "Aaron",
+      "symbol": "ZS",
+      "position": "short"
+    },
+    {
+      "name": "Eddie",
+      "symbol": "Cake",
+      "position": "long"
+    },
+    {
+      "name": "AJ",
+      "symbol": "LIXT",
+      "position": "long"
+    },
+    {
+      "name": "Dylan",
+      "symbol": "CUK",
+      "position": "long"
+    },
+    {
+      "name": "Zhang",
+      "symbol": "WMT",
+      "position": "long"
+    },
+    {
+      "name": "Ynabon",
+      "symbol": "SNOW",
+      "position": "long"
+    },
+    {
+      "name": "Peter",
+      "symbol": "CHWY",
+      "position": "long"
+    },
+    {
+      "name": "John",
+      "symbol": "TSLA",
+      "position": "long"
+    }
   ],
   "startDate": "2025-08-21"
 }
