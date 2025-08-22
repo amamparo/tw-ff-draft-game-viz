@@ -1,0 +1,15 @@
+{
+  "stockSymbols": [
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "AMZN",
+    "TSLA",
+    "NVDA",
+    "META",
+    "NFLX",
+    "AMD",
+    "CRM"
+  ],
+  "startDate": "2024-01-01"
+}

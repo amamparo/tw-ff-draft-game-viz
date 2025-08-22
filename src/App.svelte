@@ -1,30 +1,35 @@
 <script>
-	export let name;
+	import StockChart from './StockChart.svelte';
 </script>
 
 <main>
-	<h1>Hello {name}!</h1>
-	<p>Welcome to your new Svelte app</p>
+	<h1>Stock Performance Dashboard</h1>
+	<StockChart />
 </main>
 
 <style>
 	main {
-		text-align: center;
-		padding: 1em;
-		max-width: 240px;
+		padding: 20px;
+		max-width: 1200px;
 		margin: 0 auto;
 	}
 
 	h1 {
-		color: #ff3e00;
-		text-transform: uppercase;
-		font-size: 4em;
-		font-weight: 100;
+		color: #333;
+		text-align: center;
+		font-size: 2.5em;
+		font-weight: 300;
+		margin-bottom: 30px;
 	}
 
-	@media (min-width: 640px) {
+	@media (max-width: 768px) {
 		main {
-			max-width: none;
+			padding: 10px;
+		}
+		
+		h1 {
+			font-size: 2em;
+			margin-bottom: 20px;
 		}
 	}
 </style>
