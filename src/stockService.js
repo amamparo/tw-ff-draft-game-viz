@@ -75,9 +75,10 @@ async function fetchYahooFinanceData(symbol, startTimestamp, endTimestamp) {
     
     const response = await fetch(apiUrl, { 
       signal: controller.signal,
+      mode: 'cors',
       headers: {
         'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (compatible; StockDataFetcher/1.0)'
+        'Content-Type': 'application/json'
       }
     });
     
@@ -105,6 +106,8 @@ async function fetchYahooFinanceData(symbol, startTimestamp, endTimestamp) {
     
   } catch (error) {
     console.error(`Dedicated proxy failed for ${symbol}:`, error.message);
+    console.error('Full error details:', error);
+    console.error('API URL attempted:', apiUrl);
     throw error;
   }
 }

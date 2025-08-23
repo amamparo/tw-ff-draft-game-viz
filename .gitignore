@@ -101,4 +101,20 @@ yarn-error.log*
 ehthumbs.db
 Thumbs.db
 
+# AWS CDK
 cdk.out
+infrastructure/cdk.out/
+*.d.ts
+*.js
+!infrastructure/lambda/*.js
+
+# CDK asset staging
+.cdk.staging
+cdk.context.json
+
+# AWS credentials
+~/.aws/credentials
+~/.aws/config
+
+# Infrastructure outputs
+infrastructure/outputs.json
