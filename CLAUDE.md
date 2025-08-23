@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Overview
+
+**Trading Contest Dashboard** - A full-screen stock performance visualization for contest participants with long/short positions.
+
+For detailed project information, architecture, and configuration, see [README.md](./README.md).
+
 ## Development Commands
 
 ### Building and Development
@@ -9,94 +15,78 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run dev` - Start development server with live reload
 - `npm start` - Serve built application locally
 
+### Infrastructure (from `/infrastructure` directory)
+- `npm run build` - Compile TypeScript CDK code
+- `npx cdk deploy` - Deploy AWS infrastructure
+- `npx cdk deploy --require-approval never` - Deploy without approval prompt
+
 ### Dependencies
 - `npm install` - Install all dependencies after adding new packages
 
-## Architecture Overview
+## Key Implementation Details
 
-This is a **Trading Contest Dashboard** - a full-screen, minimal Svelte web application that visualizes stock performance for multiple contest entrants with long/short positions.
+### AWS Lambda Proxy
+The application uses a **dedicated AWS Lambda proxy** (`infrastructure/lambda/yahoo-proxy.js`) instead of public CORS proxies:
+- Direct connection to Yahoo Finance API
+- Built-in CORS support and error handling
+- 30-second timeout with proper resource cleanup
+- Deployed via API Gateway at: `https://a3nigzzk33.execute-api.us-east-1.amazonaws.com/prod/yahoo`
 
-### Core Architecture
-
-**Frontend Stack:**
-- **Svelte 3** - Component framework with minimal runtime
-- **Chart.js 4** with zoom plugin - Interactive charting with pan/zoom
-- **Rollup** - Build system with live reload in development
-
-**Data Flow:**
-1. Configuration loaded from `public/config.json` (contest entrants with positions)
-2. Stock data fetched in parallel from Yahoo Finance via CORS proxies
-3. Performance calculated with position adjustments (short positions inverted)
-4. Real-time chart rendered with distinct colors per entrant
-
-### Key Components
-
-**`src/stockService.js`** - Core data service handling:
-- Parallel Yahoo Finance API requests through multiple CORS proxy fallbacks
-- Long/short position performance calculations (shorts show inverted gains)
-- Error handling with graceful degradation per symbol
-
-**`src/StockChart.svelte`** - Main visualization component:
-- Full-screen chart (100vw x 100vh) with no UI clutter
-- 12 distinct high-contrast colors for easy differentiation
-- Interactive zoom/pan on time axis only
-- Hourly data intervals for detailed performance tracking
-
-**`public/config.json`** - Contest configuration with structure:
-```json
-{
-  "entrants": [
-    {"name": "Trader", "symbol": "STOCK", "position": "long|short"}
-  ],
-  "startDate": "YYYY-MM-DD"
-}
-```
-
-### Data Processing Pipeline
-
-**Stock Data Fetching:**
-- Extracts unique symbols from entrants to minimize API calls
-- Uses 3 CORS proxy fallbacks: allorigins.win, corsproxy.io, cors-anywhere.herokuapp.com
-- Yahoo Finance v8 chart API with 1-hour intervals
-- Parallel requests for all symbols with 200ms delays
-
-**Performance Calculation:**
-- Standard percentage change for long positions: `((current - start) / start) * 100`
-- Inverted for short positions: `-(((current - start) / start) * 100)`
-- Results in positive performance when shorts profit from stock declines
+### Data Processing
+- **Performance Calculation**: See [README.md#performance-calculation](./README.md#performance-calculation)
+- **Parallel Fetching**: All unique symbols fetched simultaneously
+- **Error Isolation**: Single symbol failures don't break the entire chart
 
 ### Chart Configuration
+- **Full viewport coverage**: `position: fixed`, 100vw x 100vh
+- **12 distinct colors**: Pre-selected for maximum contrast
+- **Interactive controls**: Zoom/pan on time axis only
+- **Legend format**: `{name} ({position} {symbol})`
 
-**Visual Design:**
-- Full viewport coverage with `position: fixed`
-- Legend format: `{name} ({position} {symbol})`
-- 12 pre-selected colors optimized for distinction
-- No titles, controls, or informational text - pure data visualization
+### Critical Files
 
-**Interactions:**
-- Mouse wheel zoom on time axis
-- Click-drag panning
-- Hover tooltips showing exact performance percentages
-- Chart.js zoom plugin with x-axis only mode
+**Frontend Core:**
+- `src/stockService.js` - Yahoo Finance data fetching via AWS proxy
+- `src/StockChart.svelte` - Main visualization component
+- `public/config.json` - Contest configuration (see [README.md#configuration](./README.md#configuration))
 
-### Configuration Management
+**Infrastructure:**
+- `infrastructure/lib/infrastructure-stack.ts` - CDK stack with Lambda, API Gateway, S3, CloudFront
+- `infrastructure/lambda/yahoo-proxy.js` - Lambda function for Yahoo Finance API
 
-The contest can be reconfigured by editing `public/config.json`:
-- Add/remove entrants
-- Change start date for performance baseline
-- Modify symbols or positions
-- No code changes required - data-driven configuration
+## Important Conventions
 
-### API Integration Notes
+1. **No Mock Data**: Always show real errors to users, never use fallback mock data
+2. **Minimal UI**: Focus on data visualization, avoid unnecessary controls or text
+3. **Error Handling**: Per-symbol error isolation with console logging for debugging
+4. **Date/Time**: Market hours in Central Time (UTC-5), hourly intervals
+5. **CORS**: All CORS handling done via AWS API Gateway configuration
 
-**Yahoo Finance Integration:**
-- Uses v8/finance/chart endpoint (not the deprecated download API)
-- Requires CORS proxy due to browser restrictions
-- Fallback proxy system ensures reliability
-- Hourly data provides granular performance tracking
+## Testing the Proxy
 
-**Error Handling:**
-- Per-symbol error isolation (one failure doesn't break others)
-- Graceful degradation shows chart with available data
-- Console logging for debugging API issues
-- No mock data fallbacks - shows real errors to user
+```bash
+# Test the Lambda proxy directly
+curl "https://a3nigzzk33.execute-api.us-east-1.amazonaws.com/prod/yahoo?symbol=AAPL&period1=1755307321&period2=1755912124&interval=1h"
+```
+
+## Deployment Notes
+
+1. **Build order**: Always build frontend (`npm run build`) before deploying infrastructure
+2. **CloudFront invalidation**: Automatic on deployment via CDK
+3. **Domain**: Configured for `tw-ff-draft-game-viz.aaronmamparo.com` with existing ACM certificate
+
+## Common Tasks
+
+### Add New Trader
+Edit `public/config.json` and add to the `entrants` array. No code changes required.
+
+### Change Time Range
+Modify `startDate` in `public/config.json` (format: YYYY-MM-DD).
+
+### Update Proxy URL
+Edit `getProxyUrl()` function in `src/stockService.js:115`.
+
+### Deploy Updates
+```bash
+npm run build && cd infrastructure && npx cdk deploy --require-approval never
+```
