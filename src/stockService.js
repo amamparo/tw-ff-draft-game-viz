@@ -1,4 +1,6 @@
 // Stock data service using Yahoo Finance v8 chart API
+import proxyPerformance from './proxyPerformance.js';
+
 export async function fetchStockData(entrants, startDate) {
   console.log('Fetching real stock data for entrants:', entrants.map(e => `${e.name} (${e.position} ${e.symbol})`));
   const errors = [];
@@ -64,20 +66,68 @@ async function fetchYahooFinanceData(symbol, startTimestamp, endTimestamp) {
   const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${startTimestamp}&period2=${endTimestamp}&interval=1h&includePrePost=false&events=div%7Csplit&lang=en-US&region=US`;
   
   // Multiple CORS proxy options for reliability
-  const proxies = [
+  const allProxies = [
     `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`,
     `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yahooUrl)}`,
+    `https://thingproxy.freeboard.io/fetch/${yahooUrl}`,
     `https://cors-anywhere.herokuapp.com/${yahooUrl}`
   ];
+
+  // Get proxies ordered by historical performance
+  const orderedProxies = proxyPerformance.getOrderedProxies(allProxies);
+  console.log(`Proxy performance rankings for ${symbol}:`, 
+    orderedProxies.map((p, i) => `${i+1}. ${proxyPerformance.getProxyKey(p.url)} (${Math.round(p.reliability * 100)}%)`).join(', ')
+  );
   
+  const proxies = orderedProxies.map(p => p.url);
+  
+  // If all proxies are marked as blocked, try one anyway (emergency fallback)
+  const availableProxies = proxies.filter(url => !proxyPerformance.isLikelyBlocked(url));
+  if (availableProxies.length === 0) {
+    console.warn(`All proxies marked as blocked for ${symbol}, trying emergency fallback`);
+    // Reset session data and try the best historical performer
+    proxyPerformance.currentSession.clear();
+    const emergencyProxy = orderedProxies[0]; // Best historical performer
+    if (emergencyProxy) {
+      console.log(`Emergency fallback: trying ${proxyPerformance.getProxyKey(emergencyProxy.url)}`);
+    }
+  }
+
+  const finalProxies = availableProxies.length > 0 ? availableProxies : proxies;
+
   // Try each proxy until one succeeds
-  for (let i = 0; i < proxies.length; i++) {
-    const proxyUrl = proxies[i];
+  for (let i = 0; i < finalProxies.length; i++) {
+    const proxyUrl = finalProxies[i];
     const isAllOrigins = proxyUrl.includes('allorigins.win');
+    const isCodeTabs = proxyUrl.includes('codetabs.com');
+    const isThingProxy = proxyUrl.includes('thingproxy.freeboard.io');
     
     try {
-      console.log(`Trying proxy ${i + 1} for ${symbol}...`);
-      const response = await fetch(proxyUrl);
+      const proxyName = proxyPerformance.getProxyKey(proxyUrl);
+      console.log(`Trying proxy ${i + 1} (${proxyName}) for ${symbol}...`);
+      
+      // Skip if we know this proxy is likely blocked, but only after we have some history
+      if (proxyPerformance.isLikelyBlocked(proxyUrl)) {
+        console.log(`Skipping ${proxyName} - likely blocked based on history`);
+        continue; // Skip to next proxy instead of throwing error
+      }
+      
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      const startTime = Date.now();
+      
+      const response = await fetch(proxyUrl, { 
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (compatible; StockDataFetcher/1.0)'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      const responseTime = Date.now() - startTime;
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -91,6 +141,10 @@ async function fetchYahooFinanceData(symbol, startTimestamp, endTimestamp) {
           throw new Error('No data received from proxy');
         }
         jsonData = JSON.parse(proxyData.contents);
+      } else if (isCodeTabs) {
+        // codetabs returns the raw response
+        const responseText = await response.text();
+        jsonData = JSON.parse(responseText);
       } else {
         // Other proxies return the response directly
         jsonData = await response.json();
@@ -105,15 +159,36 @@ async function fetchYahooFinanceData(symbol, startTimestamp, endTimestamp) {
         throw new Error('No data found in response');
       }
       
-      console.log(`Successfully fetched ${symbol} using proxy ${i + 1}`);
+      console.log(`Successfully fetched ${symbol} using ${proxyName} (${responseTime}ms)`);
+      
+      // Record successful proxy performance
+      const dataSize = JSON.stringify(jsonData).length;
+      proxyPerformance.recordSuccess(proxyUrl, responseTime, dataSize);
+      
       return parseYahooChartData(jsonData.chart.result[0]);
       
     } catch (error) {
-      console.warn(`Proxy ${i + 1} failed for ${symbol}:`, error.message);
+      const proxyName = proxyPerformance.getProxyKey(proxyUrl);
+      console.warn(`Proxy ${i + 1} (${proxyName}) failed for ${symbol}:`, error.message);
+      
+      // Record proxy failure with error type
+      let errorType = 'unknown';
+      if (error.message.includes('403')) errorType = '403';
+      else if (error.message.includes('401')) errorType = '401';
+      else if (error.name === 'AbortError' || error.message.includes('timeout')) errorType = 'timeout';
+      else if (error.message.includes('network') || error.message.includes('fetch')) errorType = 'network';
+      
+      proxyPerformance.recordFailure(proxyUrl, errorType);
+      
+      // Add small delay between retries to avoid overwhelming proxies
+      if (i < proxies.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000 + (i * 500)));
+      }
       
       // If this is the last proxy, re-throw the error
       if (i === proxies.length - 1) {
         console.error(`All proxies failed for ${symbol}`);
+        console.log('Final proxy performance summary:', proxyPerformance.getPerformanceSummary());
         throw error;
       }
       // Otherwise continue to the next proxy
