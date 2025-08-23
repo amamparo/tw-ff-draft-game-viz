@@ -155,10 +155,6 @@
               title: function(context) {
                 return ''; // No title
               },
-              beforeBody: function(context) {
-                // Sort the tooltip items by performance in descending order
-                context.sort((a, b) => b.parsed.y - a.parsed.y);
-              },
               label: function(context) {
                 const performance = context.parsed.y.toFixed(2);
                 const sign = performance >= 0 ? '+' : '';
