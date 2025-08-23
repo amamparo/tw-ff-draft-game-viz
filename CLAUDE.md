@@ -71,6 +71,8 @@ curl "https://a3nigzzk33.execute-api.us-east-1.amazonaws.com/prod/yahoo?symbol=A
 
 ## Deployment Notes
 
+**IMPORTANT**: Do NOT automatically deploy after making changes. Only build locally and let the human handle deployments unless explicitly asked to deploy in the prompt.
+
 1. **Build order**: Always build frontend (`npm run build`) before deploying infrastructure
 2. **CloudFront invalidation**: Automatic on deployment via CDK
 3. **Domain**: Configured for `tw-ff-draft-game-viz.aaronmamparo.com` with existing ACM certificate
@@ -86,7 +88,9 @@ Modify `startDate` in `public/config.json` (format: YYYY-MM-DD).
 ### Update Proxy URL
 Edit `getProxyUrl()` function in `src/stockService.js:115`.
 
-### Deploy Updates
+### Deploy Updates (Only when explicitly requested)
 ```bash
 npm run build && cd infrastructure && npx cdk deploy --require-approval never
 ```
+
+**Note**: Only run deployment when the user explicitly asks for it. Otherwise, just build locally.
