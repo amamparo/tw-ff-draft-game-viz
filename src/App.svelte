@@ -186,9 +186,14 @@
       padding: 15px;
     }
     
+    .toggle-container {
+      width: 100%;
+    }
+    
     .toggle-btn {
       padding: 10px 18px;
       font-size: 13px;
+      flex: 1;
     }
   }
   
@@ -197,9 +202,14 @@
       padding: 10px;
     }
     
+    .toggle-container {
+      width: 100%;
+    }
+    
     .toggle-btn {
       padding: 8px 14px;
       font-size: 12px;
+      flex: 1;
     }
   }
 </style>

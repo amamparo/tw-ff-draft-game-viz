@@ -252,9 +252,9 @@
   /* Mobile-specific optimizations */
   @media (max-width: 768px) {
     .chart-container {
-      /* Ensure full mobile viewport usage */
-      height: 100vh;
-      height: 100svh; /* Small viewport height for mobile keyboards */
+      /* Account for legend space - reduce height to prevent clipping */
+      height: calc(100% - 140px);
+      min-height: calc(100vh - 200px);
     }
   }
   
