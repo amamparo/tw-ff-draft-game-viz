@@ -61,99 +61,58 @@ export async function fetchStockData(entrants, startDate) {
 }
 
 async function fetchYahooFinanceData(symbol, startTimestamp, endTimestamp) {
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${startTimestamp}&period2=${endTimestamp}&interval=1h&includePrePost=false&events=div%7Csplit&lang=en-US&region=US`;
+  // Use our dedicated AWS Lambda proxy instead of public proxies
+  const proxyUrl = getProxyUrl();
+  const apiUrl = `${proxyUrl}/yahoo?symbol=${symbol}&period1=${startTimestamp}&period2=${endTimestamp}&interval=1h`;
   
-  // Multiple CORS proxy options for reliability
-  const allProxies = [
-    `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`,
-    `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(yahooUrl)}`,
-    `https://thingproxy.freeboard.io/fetch/${yahooUrl}`,
-    `https://cors-anywhere.herokuapp.com/${yahooUrl}`
-  ];
-
-  // Randomize proxy order to distribute load and avoid predictable patterns
-  const proxies = [...allProxies].sort(() => Math.random() - 0.5);
-  console.log(`Trying proxies for ${symbol} in random order`);
+  console.log(`Fetching data for ${symbol} using dedicated proxy...`);
   
-  // Try each proxy until one succeeds
-  for (let i = 0; i < proxies.length; i++) {
-    const proxyUrl = proxies[i];
-    const isAllOrigins = proxyUrl.includes('allorigins.win');
-    const isCodeTabs = proxyUrl.includes('codetabs.com');
-    const isThingProxy = proxyUrl.includes('thingproxy.freeboard.io');
+  try {
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const startTime = Date.now();
     
-    try {
-      const proxyName = new URL(proxyUrl).hostname || proxyUrl.split('/')[2] || 'unknown';
-      console.log(`Trying proxy ${i + 1} (${proxyName}) for ${symbol}...`);
-      
-      // Add timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-      const startTime = Date.now();
-      
-      const response = await fetch(proxyUrl, { 
-        signal: controller.signal,
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (compatible; StockDataFetcher/1.0)'
-        }
-      });
-      
-      clearTimeout(timeoutId);
-      const responseTime = Date.now() - startTime;
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+    const response = await fetch(apiUrl, { 
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (compatible; StockDataFetcher/1.0)'
       }
-      
-      let jsonData;
-      if (isAllOrigins) {
-        // allorigins.win wraps the response in a contents field
-        const proxyData = await response.json();
-        if (!proxyData.contents) {
-          throw new Error('No data received from proxy');
-        }
-        jsonData = JSON.parse(proxyData.contents);
-      } else if (isCodeTabs) {
-        // codetabs returns the raw response
-        const responseText = await response.text();
-        jsonData = JSON.parse(responseText);
-      } else {
-        // Other proxies return the response directly
-        jsonData = await response.json();
-      }
-      
-      // Check for API errors
-      if (jsonData.chart?.error) {
-        throw new Error(jsonData.chart.error.description || 'Yahoo Finance API error');
-      }
-      
-      if (!jsonData.chart?.result || jsonData.chart.result.length === 0) {
-        throw new Error('No data found in response');
-      }
-      
-      console.log(`Successfully fetched ${symbol} using ${proxyName} (${responseTime}ms)`);
-      
-      return parseYahooChartData(jsonData.chart.result[0]);
-      
-    } catch (error) {
-      const proxyName = new URL(proxyUrl).hostname || proxyUrl.split('/')[2] || 'unknown';
-      console.warn(`Proxy ${i + 1} (${proxyName}) failed for ${symbol}:`, error.message);
-      
-      // Add small delay between retries to avoid overwhelming proxies
-      if (i < proxies.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000 + (i * 500)));
-      }
-      
-      // If this is the last proxy, re-throw the error
-      if (i === proxies.length - 1) {
-        console.error(`All proxies failed for ${symbol}`);
-        throw error;
-      }
-      // Otherwise continue to the next proxy
+    });
+    
+    clearTimeout(timeoutId);
+    const responseTime = Date.now() - startTime;
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    
+    const jsonData = await response.json();
+    
+    // Check for API errors
+    if (jsonData.chart?.error) {
+      throw new Error(jsonData.chart.error.description || 'Yahoo Finance API error');
+    }
+    
+    if (!jsonData.chart?.result || jsonData.chart.result.length === 0) {
+      throw new Error('No data found in response');
+    }
+    
+    console.log(`Successfully fetched ${symbol} using dedicated proxy (${responseTime}ms)`);
+    
+    return parseYahooChartData(jsonData.chart.result[0]);
+    
+  } catch (error) {
+    console.error(`Dedicated proxy failed for ${symbol}:`, error.message);
+    throw error;
   }
+}
+
+function getProxyUrl() {
+  // In development, you can override this with a local URL or staging URL
+  // In production, this will be replaced with the actual API Gateway URL
+  return window.YAHOO_PROXY_URL || 'https://a3nigzzk33.execute-api.us-east-1.amazonaws.com/prod';
 }
 
 function parseYahooChartData(result) {

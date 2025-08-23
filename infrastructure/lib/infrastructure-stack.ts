@@ -7,6 +7,8 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 
 export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -26,6 +28,37 @@ export class InfrastructureStack extends cdk.Stack {
       'Certificate',
       'arn:aws:acm:us-east-1:388646735826:certificate/13746fc0-bc19-4a99-8151-187cacd349f3'
     );
+
+    // Create Lambda function for Yahoo Finance proxy
+    const yahooProxyFunction = new lambda.Function(this, 'YahooProxyFunction', {
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'yahoo-proxy.handler',
+      code: lambda.Code.fromAsset('lambda'),
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
+      environment: {
+        NODE_ENV: 'production'
+      }
+    });
+
+    // Create API Gateway
+    const api = new apigateway.RestApi(this, 'YahooProxyApi', {
+      restApiName: 'Yahoo Finance Proxy API',
+      description: 'Proxy service for Yahoo Finance API',
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: ['Content-Type', 'Accept', 'Authorization']
+      }
+    });
+
+    const proxyIntegration = new apigateway.LambdaIntegration(yahooProxyFunction, {
+      requestTemplates: { 'application/json': '{ "statusCode": "200" }' }
+    });
+
+    // Add /yahoo endpoint
+    const yahooResource = api.root.addResource('yahoo');
+    yahooResource.addMethod('GET', proxyIntegration);
 
     // Create S3 bucket for website hosting
     const websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
@@ -79,6 +112,11 @@ export class InfrastructureStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'CloudFrontURL', {
       value: distribution.distributionDomainName,
       description: 'CloudFront distribution URL',
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayURL', {
+      value: api.url,
+      description: 'API Gateway URL for Yahoo Finance proxy',
     });
   }
 }

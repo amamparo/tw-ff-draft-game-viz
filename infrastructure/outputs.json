@@ -1,0 +1,8 @@
+{
+  "InfrastructureStack": {
+    "ApiGatewayURL": "https://a3nigzzk33.execute-api.us-east-1.amazonaws.com/prod/",
+    "CloudFrontURL": "d2fjvh212foofj.cloudfront.net",
+    "WebsiteURL": "https://tw-ff-draft-game-viz.aaronmamparo.com",
+    "YahooProxyApiEndpoint48B1D0A0": "https://a3nigzzk33.execute-api.us-east-1.amazonaws.com/prod/"
+  }
+}
