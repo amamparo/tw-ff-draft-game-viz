@@ -2,16 +2,15 @@
   import { onMount } from 'svelte';
   import { Chart, registerables } from 'chart.js';
   import zoomPlugin from 'chartjs-plugin-zoom';
-  import { loadConfig, fetchStockData, calculatePerformance } from './stockService.js';
   
   Chart.register(...registerables, zoomPlugin);
   
+  export let config = null;
+  export let stockData = null;
+  export let performanceData = null;
+  
   let chartCanvas;
   let chart;
-  let loading = true;
-  let loadingMessage = 'Loading configuration...';
-  let error = null;
-  let config = null;
   let chartData = null;
   
   // 12 distinct, high-contrast colors optimized for visibility
@@ -30,50 +29,32 @@
     '#8B4513'  // Brown
   ];
   
-  async function loadStockData() {
-    try {
-      // Load configuration
-      loadingMessage = 'Loading configuration...';
-      config = await loadConfig();
+  function prepareChartData() {
+    if (!config || !stockData || !performanceData) return;
+    
+    // Get dates from any available stock data
+    const firstSymbol = Object.keys(stockData)[0];
+    const dates = stockData[firstSymbol]?.map(point => point.date) || [];
+    
+    const datasets = config.entrants.map((entrant, index) => {
+      const entrantKey = `${entrant.name} (${entrant.position} ${entrant.symbol})`;
+      const positionEmoji = entrant.position === 'long' ? '📈' : '📉';
+      const legendLabel = `${entrant.name} (${entrant.symbol} ${positionEmoji})`;
       
-      // Fetch stock data
-      loadingMessage = `Fetching data for ${config.entrants.length} entrants...`;
-      const stockData = await fetchStockData(config.entrants, config.startDate);
-      const performanceData = calculatePerformance(stockData, config.entrants);
-      
-      // Prepare chart data
-      loadingMessage = 'Preparing chart...';
-      
-      // Get dates from any available stock data
-      const firstSymbol = Object.keys(stockData)[0];
-      const dates = stockData[firstSymbol]?.map(point => point.date) || [];
-      
-      const datasets = config.entrants.map((entrant, index) => {
-        const entrantKey = `${entrant.name} (${entrant.position} ${entrant.symbol})`;
-        const positionEmoji = entrant.position === 'long' ? '📈' : '📉';
-        const legendLabel = `${entrant.name} (${entrant.symbol} ${positionEmoji})`;
-        
-        return {
-          label: legendLabel,
-          data: performanceData[entrantKey]?.map(point => point.performance) || [],
-          borderColor: colors[index % colors.length],
-          backgroundColor: colors[index % colors.length] + '20',
-          fill: false,
-          tension: 0.1
-        };
-      });
-      
-      chartData = {
-        labels: dates,
-        datasets: datasets
+      return {
+        label: legendLabel,
+        data: performanceData[entrantKey]?.map(point => point.performance) || [],
+        borderColor: colors[index % colors.length],
+        backgroundColor: colors[index % colors.length] + '20',
+        fill: false,
+        tension: 0.1
       };
-      
-      loading = false;
-    } catch (err) {
-      console.error('Error loading stock data:', err);
-      error = err.message;
-      loading = false;
-    }
+    });
+    
+    chartData = {
+      labels: dates,
+      datasets: datasets
+    };
   }
   
   function createChart() {
@@ -146,7 +127,7 @@
           },
           legend: {
             display: true,
-            position: 'top',
+            position: 'bottom',
             labels: {
               color: '#e0e0e0',
               font: {
@@ -226,14 +207,17 @@
     });
   }
   
-  // Reactive statement to create chart when both canvas and data are ready
-  $: if (chartCanvas && chartData && !loading && !error) {
-    createChart();
+  // Reactive statements
+  $: if (config && stockData && performanceData) {
+    prepareChartData();
   }
   
-  onMount(() => {
-    loadStockData();
-  });
+  $: if (chartCanvas && chartData) {
+    if (chart) {
+      chart.destroy();
+    }
+    createChart();
+  }
   
   // Cleanup chart on component destroy
   import { onDestroy } from 'svelte';
@@ -245,23 +229,13 @@
 </script>
 
 <div class="chart-container">
-  {#if loading}
-    <div class="loading">{loadingMessage}</div>
-  {:else if error}
-    <div class="error">Error: {error}</div>
-  {:else}
-    <canvas bind:this={chartCanvas}></canvas>
-  {/if}
+  <canvas bind:this={chartCanvas}></canvas>
 </div>
 
 <style>
   .chart-container {
-    width: 100vw;
-    height: 100vh;
-    height: 100dvh; /* Dynamic viewport height for mobile */
-    position: fixed;
-    top: 0;
-    left: 0;
+    width: 100%;
+    height: 100%;
     padding: 0;
     margin: 0;
     box-sizing: border-box;
@@ -275,26 +249,6 @@
     touch-action: pan-x; /* Allow horizontal panning only */
   }
   
-  .loading, .error {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    width: 100%;
-    font-size: 18px;
-    position: absolute;
-    top: 0;
-    left: 0;
-    background-color: #1a1a1a;
-    color: #e0e0e0;
-    padding: 20px;
-    text-align: center;
-  }
-  
-  .error {
-    color: #ff6b6b;
-  }
-  
   /* Mobile-specific optimizations */
   @media (max-width: 768px) {
     .chart-container {
@@ -302,18 +256,9 @@
       height: 100vh;
       height: 100svh; /* Small viewport height for mobile keyboards */
     }
-    
-    .loading, .error {
-      font-size: 16px;
-      padding: 15px;
-    }
   }
   
   @media (max-width: 480px) {
-    .loading, .error {
-      font-size: 14px;
-      padding: 10px;
-    }
   }
   
   /* Tablet optimizations */

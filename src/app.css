@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ensure dark mode by default */
+@layer base {
+  html, body {
+    @apply bg-gray-900 text-gray-100;
+  }
+}
