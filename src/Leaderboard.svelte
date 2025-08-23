@@ -83,10 +83,10 @@
       <thead>
         <tr>
           <th>Rank</th>
-          <th>Trader</th>
+          <th>Name</th>
           <th>Symbol</th>
           <th>Position</th>
-          <th>Performance</th>
+          <th class="perf-header">Performance</th>
           <th class="price-col">Current Price</th>
         </tr>
       </thead>
@@ -96,7 +96,7 @@
           <tr class="entry-row {entry.rank <= 3 ? 'podium' : ''}">
             <td class="rank-cell">
               <span class="rank-number">{entry.rank}</span>
-              <span class="medal">{getMedalEmoji(entry.rank)}</span>
+              <span class="medal desktop-only">{getMedalEmoji(entry.rank)}</span>
             </td>
             <td class="name-cell">
               {entry.name}
@@ -252,6 +252,10 @@
     color: #d1d5db;
   }
   
+  .desktop-only {
+    display: inline;
+  }
+  
   /* Mobile responsive */
   @media (max-width: 768px) {
     .leaderboard-container {
@@ -260,6 +264,18 @@
     
     .price-col {
       display: none;
+    }
+    
+    .desktop-only {
+      display: none;
+    }
+    
+    .perf-header::after {
+      content: "Perf.";
+    }
+    
+    .perf-header {
+      font-size: 0;
     }
     
     th, td {
@@ -294,12 +310,12 @@
       padding: 5px;
     }
     
-    th:nth-child(4) {
-      display: none;
+    th:nth-child(4)::after {
+      content: "Pos.";
     }
     
-    .position-cell {
-      display: none;
+    th:nth-child(4) {
+      font-size: 0;
     }
   }
 </style>
