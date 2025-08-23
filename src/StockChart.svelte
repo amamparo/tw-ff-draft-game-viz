@@ -1,9 +1,10 @@
 <script>
   import { onMount } from 'svelte';
   import { Chart, registerables } from 'chart.js';
+  import zoomPlugin from 'chartjs-plugin-zoom';
   import { loadConfig, fetchStockData, calculatePerformance } from './stockService.js';
   
-  Chart.register(...registerables);
+  Chart.register(...registerables, zoomPlugin);
   
   let chartCanvas;
   let chart;
@@ -13,10 +14,20 @@
   let config = null;
   let chartData = null;
   
+  // 12 distinct, high-contrast colors optimized for visibility
   const colors = [
-    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', 
-    '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF',
-    '#4BC0C0', '#FF6384'
+    '#E31A1C', // Bright Red
+    '#1F78B4', // Blue  
+    '#33A02C', // Green
+    '#FF7F00', // Orange
+    '#6A3D9A', // Purple
+    '#FFD700', // Gold
+    '#A6CEE3', // Light Blue
+    '#B2DF8A', // Light Green
+    '#FB9A99', // Pink
+    '#FDBF6F', // Light Orange
+    '#CAB2D6', // Light Purple
+    '#8B4513'  // Brown
   ];
   
   async function loadStockData() {
@@ -26,22 +37,31 @@
       config = await loadConfig();
       
       // Fetch stock data
-      loadingMessage = `Fetching data for ${config.stockSymbols.length} symbols...`;
-      const stockData = await fetchStockData(config.stockSymbols, config.startDate);
-      const performanceData = calculatePerformance(stockData);
+      loadingMessage = `Fetching data for ${config.entrants.length} entrants...`;
+      const stockData = await fetchStockData(config.entrants, config.startDate);
+      const performanceData = calculatePerformance(stockData, config.entrants);
       
       // Prepare chart data
       loadingMessage = 'Preparing chart...';
-      const dates = stockData[config.stockSymbols[0]]?.map(point => point.date) || [];
       
-      const datasets = config.stockSymbols.map((symbol, index) => ({
-        label: symbol,
-        data: performanceData[symbol]?.map(point => point.performance) || [],
-        borderColor: colors[index % colors.length],
-        backgroundColor: colors[index % colors.length] + '20',
-        fill: false,
-        tension: 0.1
-      }));
+      // Get dates from any available stock data
+      const firstSymbol = Object.keys(stockData)[0];
+      const dates = stockData[firstSymbol]?.map(point => point.date) || [];
+      
+      const datasets = config.entrants.map((entrant, index) => {
+        const entrantKey = `${entrant.name} (${entrant.position} ${entrant.symbol})`;
+        const positionEmoji = entrant.position === 'long' ? '📈' : '📉';
+        const legendLabel = `${entrant.name} (${entrant.symbol} ${positionEmoji})`;
+        
+        return {
+          label: legendLabel,
+          data: performanceData[entrantKey]?.map(point => point.performance) || [],
+          borderColor: colors[index % colors.length],
+          backgroundColor: colors[index % colors.length] + '20',
+          fill: false,
+          tension: 0.1
+        };
+      });
       
       chartData = {
         labels: dates,
@@ -69,49 +89,95 @@
         scales: {
           y: {
             title: {
-              display: true,
-              text: 'Performance (%)'
+              display: false
             },
             ticks: {
+              color: '#b0b0b0',
               callback: function(value) {
                 return value.toFixed(1) + '%';
               }
+            },
+            grid: {
+              color: '#3a3a3a'
             }
           },
           x: {
             title: {
-              display: true,
-              text: 'Time'
+              display: false
             },
             ticks: {
+              color: '#b0b0b0',
               maxTicksLimit: 15,
               callback: function(value, index, ticks) {
-                const date = new Date(this.getLabelForValue(value));
-                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const dateStr = this.getLabelForValue(value);
+                const date = new Date(dateStr);
+                const month = date.getMonth() + 1;
+                const day = date.getDate();
+                const hour = date.getHours();
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                
+                // Show date and time in compact format
+                return `${month}/${day} ${displayHour}${ampm}`;
               }
+            },
+            grid: {
+              color: '#3a3a3a'
             }
           }
         },
         plugins: {
           title: {
-            display: true,
-            text: `Stock Performance Since ${config.startDate}`
+            display: false
           },
           legend: {
             display: true,
-            position: 'top'
+            position: 'top',
+            labels: {
+              color: '#e0e0e0'
+            }
           },
           tooltip: {
+            backgroundColor: 'rgba(42, 42, 42, 0.95)',
+            titleColor: '#e0e0e0',
+            bodyColor: '#e0e0e0',
+            borderColor: '#555',
+            borderWidth: 1,
+            cornerRadius: 8,
+            padding: 12,
+            displayColors: true,
             callbacks: {
+              title: function(context) {
+                return ''; // No title
+              },
               label: function(context) {
-                return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
+                const performance = context.parsed.y.toFixed(2);
+                const sign = performance >= 0 ? '+' : '';
+                return `${context.dataset.label}: ${sign}${performance}%`;
               }
+            }
+          },
+          zoom: {
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true
+              },
+              mode: 'x',
+              speed: 0.1
+            },
+            pan: {
+              enabled: true,
+              mode: 'x',
+              speed: 0.5
             }
           }
         },
         interaction: {
           intersect: false,
-          mode: 'index'
+          mode: 'nearest'
         }
       }
     });
@@ -142,21 +208,18 @@
     <div class="error">Error: {error}</div>
   {:else}
     <canvas bind:this={chartCanvas}></canvas>
-    {#if config}
-      <div class="config-info">
-        <p><strong>Tracking:</strong> {config.stockSymbols.join(', ')}</p>
-        <p><strong>Since:</strong> {config.startDate}</p>
-      </div>
-    {/if}
   {/if}
 </div>
 
 <style>
   .chart-container {
-    width: 100%;
-    height: 500px;
-    position: relative;
-    padding: 20px;
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    padding: 0;
+    margin: 0;
     box-sizing: border-box;
   }
   
@@ -170,29 +233,16 @@
     align-items: center;
     justify-content: center;
     height: 100%;
+    width: 100%;
     font-size: 18px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
   }
   
   .error {
-    color: #ff3e00;
-  }
-  
-  .config-info {
-    margin-top: 15px;
-    padding: 10px;
-    background-color: #f8f9fa;
-    border-radius: 5px;
-    font-size: 14px;
-  }
-  
-  .config-info p {
-    margin: 5px 0;
-  }
-  
-  @media (max-width: 768px) {
-    .chart-container {
-      height: 400px;
-      padding: 10px;
-    }
+    color: #ff6b6b;
   }
 </style>

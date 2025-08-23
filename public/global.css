@@ -5,7 +5,8 @@ html, body {
 }
 
 body {
-	color: #333;
+	color: #e0e0e0;
+	background-color: #1a1a1a;
 	margin: 0;
 	padding: 8px;
 	box-sizing: border-box;
@@ -13,7 +14,7 @@ body {
 }
 
 a {
-	color: rgb(0,100,200);
+	color: #4a9eff;
 	text-decoration: none;
 }
 
@@ -22,7 +23,7 @@ a:hover {
 }
 
 a:visited {
-	color: rgb(0,80,160);
+	color: #3d7acc;
 }
 
 label {
@@ -36,28 +37,30 @@ input, button, select, textarea {
 	padding: 0.4em;
 	margin: 0 0 0.5em 0;
 	box-sizing: border-box;
-	border: 1px solid #ccc;
+	border: 1px solid #555;
 	border-radius: 2px;
+	background-color: #2a2a2a;
+	color: #e0e0e0;
 }
 
 input:disabled {
-	color: #ccc;
+	color: #666;
 }
 
 button {
-	color: #333;
-	background-color: #f4f4f4;
+	color: #e0e0e0;
+	background-color: #3a3a3a;
 	outline: none;
 }
 
 button:disabled {
-	color: #999;
+	color: #666;
 }
 
 button:not(:disabled):active {
-	background-color: #ddd;
+	background-color: #4a4a4a;
 }
 
 button:focus {
-	border-color: #666;
+	border-color: #888;
 }

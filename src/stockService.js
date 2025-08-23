@@ -1,15 +1,20 @@
 // Stock data service using Yahoo Finance v8 chart API
-export async function fetchStockData(symbols, startDate) {
-  console.log('Fetching real stock data for symbols:', symbols);
+export async function fetchStockData(entrants, startDate) {
+  console.log('Fetching real stock data for entrants:', entrants.map(e => `${e.name} (${e.position} ${e.symbol})`));
   const errors = [];
   
-  // Convert start date to timestamps
-  const startTimestamp = Math.floor(new Date(startDate).getTime() / 1000);
+  // Convert start date to timestamps - set to 8:00 AM Central Time (top of hour)
+  // Create a date object for 8:00 AM on the start date in Central Time
+  const startDateObj = new Date(startDate + 'T08:00:00-05:00'); // Explicitly set as Central Daylight Time (CDT)
+  const startTimestamp = Math.floor(startDateObj.getTime() / 1000);
   const endTimestamp = Math.floor(new Date().getTime() / 1000);
+  
+  // Extract unique symbols from entrants
+  const uniqueSymbols = [...new Set(entrants.map(entrant => entrant.symbol))];
   
   // Fetch all symbols in parallel
   console.log('Starting parallel requests for all symbols...');
-  const fetchPromises = symbols.map(async (symbol) => {
+  const fetchPromises = uniqueSymbols.map(async (symbol) => {
     try {
       console.log(`Fetching data for ${symbol}...`);
       const data = await fetchYahooFinanceData(symbol, startTimestamp, endTimestamp);
@@ -131,9 +136,43 @@ function parseYahooChartData(result) {
     const close = closes[i];
     
     if (close !== null && close !== undefined && !isNaN(close)) {
-      // Convert timestamp to datetime string for hourly data
-      const date = new Date(timestamp * 1000);
-      const dateTime = date.toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm format
+      // Yahoo Finance timestamps are in UTC
+      // We'll store them as proper Date objects and let the browser handle timezone display
+      const utcDate = new Date(timestamp * 1000);
+      
+      // Create a formatted string that represents the actual market time
+      // We want to show market hours (Central Time) regardless of user's timezone
+      const utcHours = utcDate.getUTCHours();
+      const utcMinutes = utcDate.getUTCMinutes();
+      
+      // Convert UTC to Central Daylight Time (UTC-5)
+      let centralHours = utcHours - 5;
+      let centralDate = utcDate.getUTCDate();
+      let centralMonth = utcDate.getUTCMonth();
+      let centralYear = utcDate.getUTCFullYear();
+      
+      // Handle day rollover
+      if (centralHours < 0) {
+        centralHours += 24;
+        centralDate -= 1;
+        if (centralDate <= 0) {
+          // Handle month rollover (simplified)
+          centralMonth -= 1;
+          if (centralMonth < 0) {
+            centralMonth = 11;
+            centralYear -= 1;
+          }
+          centralDate = new Date(centralYear, centralMonth + 1, 0).getDate();
+        }
+      }
+      
+      // Format as market time string
+      const year = centralYear;
+      const month = String(centralMonth + 1).padStart(2, '0');
+      const day = String(centralDate).padStart(2, '0');
+      const hour = String(centralHours).padStart(2, '0');
+      const minute = String(utcMinutes).padStart(2, '0');
+      const dateTime = `${year}-${month}-${day}T${hour}:${minute}`;
       
       data.push({
         date: dateTime,
@@ -163,19 +202,30 @@ export async function loadConfig() {
   }
 }
 
-// Calculate percentage performance from start date
-export function calculatePerformance(stockData) {
+// Calculate percentage performance from start date considering long/short positions
+export function calculatePerformance(stockData, entrants) {
   const performanceData = {};
   
-  Object.keys(stockData).forEach(symbol => {
+  entrants.forEach(entrant => {
+    const { name, symbol, position } = entrant;
     const data = stockData[symbol];
-    if (data.length === 0) return;
+    
+    if (!data || data.length === 0) return;
     
     const startPrice = data[0].price;
-    performanceData[symbol] = data.map(point => ({
-      date: point.date,
-      performance: ((point.price - startPrice) / startPrice) * 100
-    }));
+    const entrantKey = `${name} (${position} ${symbol})`;
+    
+    performanceData[entrantKey] = data.map(point => {
+      const rawPerformance = ((point.price - startPrice) / startPrice) * 100;
+      
+      // For short positions, invert the performance (gain when stock goes down)
+      const adjustedPerformance = position === 'short' ? -rawPerformance : rawPerformance;
+      
+      return {
+        date: point.date,
+        performance: adjustedPerformance
+      };
+    });
   });
   
   return performanceData;
