@@ -1,6 +1,4 @@
 // Stock data service using Yahoo Finance v8 chart API
-import proxyPerformance from './proxyPerformance.js';
-
 export async function fetchStockData(entrants, startDate) {
   console.log('Fetching real stock data for entrants:', entrants.map(e => `${e.name} (${e.position} ${e.symbol})`));
   const errors = [];
@@ -74,44 +72,20 @@ async function fetchYahooFinanceData(symbol, startTimestamp, endTimestamp) {
     `https://cors-anywhere.herokuapp.com/${yahooUrl}`
   ];
 
-  // Get proxies ordered by historical performance
-  const orderedProxies = proxyPerformance.getOrderedProxies(allProxies);
-  console.log(`Proxy performance rankings for ${symbol}:`, 
-    orderedProxies.map((p, i) => `${i+1}. ${proxyPerformance.getProxyKey(p.url)} (${Math.round(p.reliability * 100)}%)`).join(', ')
-  );
+  // Randomize proxy order to distribute load and avoid predictable patterns
+  const proxies = [...allProxies].sort(() => Math.random() - 0.5);
+  console.log(`Trying proxies for ${symbol} in random order`);
   
-  const proxies = orderedProxies.map(p => p.url);
-  
-  // If all proxies are marked as blocked, try one anyway (emergency fallback)
-  const availableProxies = proxies.filter(url => !proxyPerformance.isLikelyBlocked(url));
-  if (availableProxies.length === 0) {
-    console.warn(`All proxies marked as blocked for ${symbol}, trying emergency fallback`);
-    // Reset session data and try the best historical performer
-    proxyPerformance.currentSession.clear();
-    const emergencyProxy = orderedProxies[0]; // Best historical performer
-    if (emergencyProxy) {
-      console.log(`Emergency fallback: trying ${proxyPerformance.getProxyKey(emergencyProxy.url)}`);
-    }
-  }
-
-  const finalProxies = availableProxies.length > 0 ? availableProxies : proxies;
-
   // Try each proxy until one succeeds
-  for (let i = 0; i < finalProxies.length; i++) {
-    const proxyUrl = finalProxies[i];
+  for (let i = 0; i < proxies.length; i++) {
+    const proxyUrl = proxies[i];
     const isAllOrigins = proxyUrl.includes('allorigins.win');
     const isCodeTabs = proxyUrl.includes('codetabs.com');
     const isThingProxy = proxyUrl.includes('thingproxy.freeboard.io');
     
     try {
-      const proxyName = proxyPerformance.getProxyKey(proxyUrl);
+      const proxyName = new URL(proxyUrl).hostname || proxyUrl.split('/')[2] || 'unknown';
       console.log(`Trying proxy ${i + 1} (${proxyName}) for ${symbol}...`);
-      
-      // Skip if we know this proxy is likely blocked, but only after we have some history
-      if (proxyPerformance.isLikelyBlocked(proxyUrl)) {
-        console.log(`Skipping ${proxyName} - likely blocked based on history`);
-        continue; // Skip to next proxy instead of throwing error
-      }
       
       // Add timeout to prevent hanging requests
       const controller = new AbortController();
@@ -161,24 +135,11 @@ async function fetchYahooFinanceData(symbol, startTimestamp, endTimestamp) {
       
       console.log(`Successfully fetched ${symbol} using ${proxyName} (${responseTime}ms)`);
       
-      // Record successful proxy performance
-      const dataSize = JSON.stringify(jsonData).length;
-      proxyPerformance.recordSuccess(proxyUrl, responseTime, dataSize);
-      
       return parseYahooChartData(jsonData.chart.result[0]);
       
     } catch (error) {
-      const proxyName = proxyPerformance.getProxyKey(proxyUrl);
+      const proxyName = new URL(proxyUrl).hostname || proxyUrl.split('/')[2] || 'unknown';
       console.warn(`Proxy ${i + 1} (${proxyName}) failed for ${symbol}:`, error.message);
-      
-      // Record proxy failure with error type
-      let errorType = 'unknown';
-      if (error.message.includes('403')) errorType = '403';
-      else if (error.message.includes('401')) errorType = '401';
-      else if (error.name === 'AbortError' || error.message.includes('timeout')) errorType = 'timeout';
-      else if (error.message.includes('network') || error.message.includes('fetch')) errorType = 'network';
-      
-      proxyPerformance.recordFailure(proxyUrl, errorType);
       
       // Add small delay between retries to avoid overwhelming proxies
       if (i < proxies.length - 1) {
@@ -188,7 +149,6 @@ async function fetchYahooFinanceData(symbol, startTimestamp, endTimestamp) {
       // If this is the last proxy, re-throw the error
       if (i === proxies.length - 1) {
         console.error(`All proxies failed for ${symbol}`);
-        console.log('Final proxy performance summary:', proxyPerformance.getPerformanceSummary());
         throw error;
       }
       // Otherwise continue to the next proxy
