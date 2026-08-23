@@ -17,7 +17,6 @@ export class InfrastructureStack extends cdk.Stack {
     const domainName = 'tw-ff-draft-game-viz.aaronmamparo.com';
     const rootDomain = 'aaronmamparo.com';
 
-    // Lookup existing Route53 hosted zone
     const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
       domainName: rootDomain,
     });
@@ -29,7 +28,6 @@ export class InfrastructureStack extends cdk.Stack {
       'arn:aws:acm:us-east-1:388646735826:certificate/13746fc0-bc19-4a99-8151-187cacd349f3'
     );
 
-    // Create Lambda function for Yahoo Finance proxy
     const yahooProxyFunction = new lambda.Function(this, 'YahooProxyFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'yahoo-proxy.handler',
@@ -41,7 +39,6 @@ export class InfrastructureStack extends cdk.Stack {
       }
     });
 
-    // Create API Gateway
     const api = new apigateway.RestApi(this, 'YahooProxyApi', {
       restApiName: 'Yahoo Finance Proxy API',
       description: 'Proxy service for Yahoo Finance API',
@@ -56,18 +53,15 @@ export class InfrastructureStack extends cdk.Stack {
       requestTemplates: { 'application/json': '{ "statusCode": "200" }' }
     });
 
-    // Add /yahoo endpoint
     const yahooResource = api.root.addResource('yahoo');
     yahooResource.addMethod('GET', proxyIntegration);
 
-    // Create S3 bucket for website hosting
     const websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
       bucketName: `tw-ff-draft-game-viz-${this.account}-${this.region}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
 
-    // Create CloudFront distribution
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(websiteBucket),
@@ -75,7 +69,7 @@ export class InfrastructureStack extends cdk.Stack {
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
       },
       domainNames: [domainName],
-      certificate: certificate,
+      certificate,
       defaultRootObject: 'index.html',
       errorResponses: [
         {
@@ -86,7 +80,6 @@ export class InfrastructureStack extends cdk.Stack {
       ],
     });
 
-    // Create Route53 A record
     new route53.ARecord(this, 'AliasRecord', {
       zone: hostedZone,
       recordName: domainName,
@@ -95,7 +88,6 @@ export class InfrastructureStack extends cdk.Stack {
       ),
     });
 
-    // Deploy website files
     new s3deploy.BucketDeployment(this, 'DeployWebsite', {
       sources: [s3deploy.Source.asset('../public')],
       destinationBucket: websiteBucket,
@@ -103,7 +95,6 @@ export class InfrastructureStack extends cdk.Stack {
       distributionPaths: ['/*'],
     });
 
-    // Output the website URL
     new cdk.CfnOutput(this, 'WebsiteURL', {
       value: `https://${domainName}`,
       description: 'URL of the website',

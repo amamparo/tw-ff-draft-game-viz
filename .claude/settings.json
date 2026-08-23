@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/simplify-check.sh\"",
+            "timeout": 15,
+            "statusMessage": "Checking whether changed source files need a code-simplifier pass"
+          }
+        ]
+      }
+    ]
+  }
+}

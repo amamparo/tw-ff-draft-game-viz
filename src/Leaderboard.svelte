@@ -3,70 +3,57 @@
   export let entrants = [];
   export let stockData = {};
   
-  // Calculate current performance for each entrant
   function getCurrentPerformance() {
     const performances = [];
-    
+
     entrants.forEach(entrant => {
       const entrantKey = `${entrant.name} (${entrant.position} ${entrant.symbol})`;
       const data = performanceData[entrantKey];
-      
+
       if (data && data.length > 0) {
-        const latestPerformance = data[data.length - 1].performance;
-        const latestDate = data[data.length - 1].date;
-        
-        // Get current price for the symbol
         const symbolData = stockData[entrant.symbol];
-        const currentPrice = symbolData && symbolData.length > 0 
-          ? symbolData[symbolData.length - 1].price 
+        const currentPrice = symbolData && symbolData.length > 0
+          ? symbolData[symbolData.length - 1].price
           : null;
-        
+
         performances.push({
-          rank: 0, // Will be set after sorting
           name: entrant.name,
           symbol: entrant.symbol,
           position: entrant.position,
-          performance: latestPerformance,
-          currentPrice: currentPrice,
-          lastUpdate: latestDate
+          performance: data[data.length - 1].performance,
+          currentPrice
         });
       }
     });
-    
-    // Sort by performance descending
+
+    // Sort by performance descending, then rank
     performances.sort((a, b) => b.performance - a.performance);
-    
-    // Assign ranks
     performances.forEach((p, i) => {
       p.rank = i + 1;
     });
-    
+
     return performances;
   }
   
   $: leaderboardData = getCurrentPerformance();
   
-  // Format performance with color
   function formatPerformance(value) {
     const sign = value >= 0 ? '+' : '';
     const color = value >= 0 ? '#4ade80' : '#f87171';
     return {
       text: `${sign}${value.toFixed(2)}%`,
-      color: color
+      color
     };
   }
-  
-  // Format price
+
   function formatPrice(price) {
     return price ? `$${price.toFixed(2)}` : 'N/A';
   }
-  
-  // Get emoji for position
+
   function getPositionEmoji(position) {
     return position === 'long' ? '📈' : '📉';
   }
-  
-  // Get medal emoji for top 3
+
   function getMedalEmoji(rank) {
     switch(rank) {
       case 1: return '🥇';
@@ -93,7 +80,7 @@
       <tbody>
         {#each leaderboardData as entry}
           {@const perf = formatPerformance(entry.performance)}
-          <tr class="entry-row {entry.rank <= 3 ? 'podium' : ''}">
+          <tr class="entry-row" class:podium={entry.rank <= 3}>
             <td class="rank-cell">
               <span class="rank-number">{entry.rank}</span>
               <span class="medal desktop-only">{getMedalEmoji(entry.rank)}</span>

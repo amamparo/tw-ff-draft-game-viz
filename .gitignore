@@ -118,3 +118,5 @@ cdk.context.json
 
 # Infrastructure outputs
 infrastructure/outputs.json
+# Claude Code code-simplifier stamp
+.claude/.simplify-stamp

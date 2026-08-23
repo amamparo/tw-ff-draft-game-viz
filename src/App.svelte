@@ -4,46 +4,40 @@
   import Leaderboard from './Leaderboard.svelte';
   import { loadConfig, fetchStockData, calculatePerformance } from './stockService.js';
   
-  let currentView = 'leaderboard'; // Default to leaderboard first
+  let currentView = 'leaderboard';
   let loading = true;
   let loadingMessage = 'Loading configuration...';
   let error = null;
   let config = null;
   let stockData = null;
   let performanceData = null;
-  
+
   async function loadData() {
     try {
-      // Load configuration
-      loadingMessage = 'Loading configuration...';
       config = await loadConfig();
-      
-      // Fetch stock data
+
       loadingMessage = `Fetching data for ${config.entrants.length} entrants...`;
       stockData = await fetchStockData(config.entrants, config.startDate);
       performanceData = calculatePerformance(stockData, config.entrants);
-      
-      loading = false;
     } catch (err) {
       console.error('Error loading stock data:', err);
       error = err.message;
+    } finally {
       loading = false;
     }
   }
-  
+
   onMount(() => {
-    // Load saved view preference from localStorage
     const savedView = localStorage.getItem('tw-ff-view');
-    if (savedView && (savedView === 'chart' || savedView === 'leaderboard')) {
+    if (savedView === 'chart' || savedView === 'leaderboard') {
       currentView = savedView;
     }
-    
+
     loadData();
   });
-  
-  function toggleView(view) {
+
+  function setView(view) {
     currentView = view;
-    // Save view preference to localStorage
     localStorage.setItem('tw-ff-view', view);
   }
 </script>
@@ -62,25 +56,23 @@
   </div>
 {:else}
   <div class="app-container">
-    <!-- Toggle Header -->
     <div class="toggle-header">
       <div class="toggle-container">
-        <button 
+        <button
           class="toggle-btn {currentView === 'leaderboard' ? 'active' : 'inactive'}"
-          on:click={() => toggleView('leaderboard')}
+          on:click={() => setView('leaderboard')}
         >
           🏆 Leaderboard
         </button>
-        <button 
+        <button
           class="toggle-btn {currentView === 'chart' ? 'active' : 'inactive'}"
-          on:click={() => toggleView('chart')}
+          on:click={() => setView('chart')}
         >
           📊 Chart
         </button>
       </div>
     </div>
-    
-    <!-- Content -->
+
     <div class="content-area">
       {#if currentView === 'leaderboard'}
         <Leaderboard {performanceData} entrants={config.entrants} {stockData} />
@@ -201,15 +193,10 @@
     .toggle-header {
       padding: 10px;
     }
-    
-    .toggle-container {
-      width: 100%;
-    }
-    
+
     .toggle-btn {
       padding: 8px 14px;
       font-size: 12px;
-      flex: 1;
     }
   }
 </style>

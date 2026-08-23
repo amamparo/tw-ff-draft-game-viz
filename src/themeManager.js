@@ -1,4 +1,36 @@
-// Theme management for light/dark mode
+const THEME_COLORS = {
+  dark: {
+    '--bg-color': '#1a1a1a',
+    '--text-color': '#e0e0e0',
+    '--text-secondary': '#b0b0b0',
+    '--border-color': '#3a3a3a',
+    '--accent-color': '#4a9eff',
+    '--error-color': '#ff6b6b',
+    '--success-color': '#51cf66',
+    '--button-bg': '#3a3a3a',
+    '--button-hover': '#4a4a4a',
+    '--grid-color': '#3a3a3a',
+    '--tooltip-bg': 'rgba(42, 42, 42, 0.95)',
+    '--switch-bg': '#4a4a4a',
+    '--switch-active': '#4a9eff'
+  },
+  light: {
+    '--bg-color': '#ffffff',
+    '--text-color': '#1a1a1a',
+    '--text-secondary': '#666666',
+    '--border-color': '#e0e0e0',
+    '--accent-color': '#2563eb',
+    '--error-color': '#dc2626',
+    '--success-color': '#16a34a',
+    '--button-bg': '#f5f5f5',
+    '--button-hover': '#e5e5e5',
+    '--grid-color': '#e5e5e5',
+    '--tooltip-bg': 'rgba(255, 255, 255, 0.95)',
+    '--switch-bg': '#e5e5e5',
+    '--switch-active': '#2563eb'
+  }
+};
+
 class ThemeManager {
   constructor() {
     this.storageKey = 'ff-theme-preference';
@@ -8,79 +40,40 @@ class ThemeManager {
   }
 
   init() {
-    // Get saved preference or default to system preference
-    const savedTheme = localStorage.getItem(this.storageKey);
-    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    if (savedTheme) {
-      this.currentTheme = savedTheme;
-    } else {
-      this.currentTheme = systemPrefersDark ? 'dark' : 'light';
-    }
-
-    // Apply initial theme
+    this.currentTheme = localStorage.getItem(this.storageKey) || this.getSystemTheme();
     this.applyTheme(this.currentTheme);
 
-    // Listen for system theme changes
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      // Only follow system changes if user hasn't set a preference
-      if (!localStorage.getItem(this.storageKey)) {
-        const newTheme = e.matches ? 'dark' : 'light';
-        this.currentTheme = newTheme;
-        this.applyTheme(newTheme);
+      if (this.isSystemDefault()) {
+        this.currentTheme = e.matches ? 'dark' : 'light';
+        this.applyTheme(this.currentTheme);
         this.notifyCallbacks();
       }
     });
   }
 
   applyTheme(theme) {
+    const isDark = theme === 'dark';
+    const colors = THEME_COLORS[isDark ? 'dark' : 'light'];
     const root = document.documentElement;
-    
-    if (theme === 'dark') {
-      root.style.setProperty('--bg-color', '#1a1a1a');
-      root.style.setProperty('--text-color', '#e0e0e0');
-      root.style.setProperty('--text-secondary', '#b0b0b0');
-      root.style.setProperty('--border-color', '#3a3a3a');
-      root.style.setProperty('--accent-color', '#4a9eff');
-      root.style.setProperty('--error-color', '#ff6b6b');
-      root.style.setProperty('--success-color', '#51cf66');
-      root.style.setProperty('--button-bg', '#3a3a3a');
-      root.style.setProperty('--button-hover', '#4a4a4a');
-      root.style.setProperty('--grid-color', '#3a3a3a');
-      root.style.setProperty('--tooltip-bg', 'rgba(42, 42, 42, 0.95)');
-      root.style.setProperty('--switch-bg', '#4a4a4a');
-      root.style.setProperty('--switch-active', '#4a9eff');
-    } else {
-      root.style.setProperty('--bg-color', '#ffffff');
-      root.style.setProperty('--text-color', '#1a1a1a');
-      root.style.setProperty('--text-secondary', '#666666');
-      root.style.setProperty('--border-color', '#e0e0e0');
-      root.style.setProperty('--accent-color', '#2563eb');
-      root.style.setProperty('--error-color', '#dc2626');
-      root.style.setProperty('--success-color', '#16a34a');
-      root.style.setProperty('--button-bg', '#f5f5f5');
-      root.style.setProperty('--button-hover', '#e5e5e5');
-      root.style.setProperty('--grid-color', '#e5e5e5');
-      root.style.setProperty('--tooltip-bg', 'rgba(255, 255, 255, 0.95)');
-      root.style.setProperty('--switch-bg', '#e5e5e5');
-      root.style.setProperty('--switch-active', '#2563eb');
-    }
 
-    // Update meta theme color for PWA
+    Object.entries(colors).forEach(([name, value]) => {
+      root.style.setProperty(name, value);
+    });
+
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
     if (themeColorMeta) {
-      themeColorMeta.content = theme === 'dark' ? '#1a1a1a' : '#ffffff';
+      themeColorMeta.content = isDark ? '#1a1a1a' : '#ffffff';
     }
   }
 
   toggle() {
-    const newTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
-    this.setTheme(newTheme);
+    this.setTheme(this.currentTheme === 'dark' ? 'light' : 'dark');
   }
 
   setTheme(theme) {
     if (theme !== 'light' && theme !== 'dark') return;
-    
+
     this.currentTheme = theme;
     localStorage.setItem(this.storageKey, theme);
     this.applyTheme(theme);
@@ -89,10 +82,8 @@ class ThemeManager {
 
   clearPreference() {
     localStorage.removeItem(this.storageKey);
-    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const newTheme = systemPrefersDark ? 'dark' : 'light';
-    this.currentTheme = newTheme;
-    this.applyTheme(newTheme);
+    this.currentTheme = this.getSystemTheme();
+    this.applyTheme(this.currentTheme);
     this.notifyCallbacks();
   }
 
@@ -113,7 +104,7 @@ class ThemeManager {
   }
 
   notifyCallbacks() {
-    this.callbacks.forEach(callback => {
+    this.callbacks.forEach((callback) => {
       try {
         callback(this.currentTheme);
       } catch (error) {

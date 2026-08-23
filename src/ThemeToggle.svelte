@@ -3,16 +3,11 @@
   import themeManager from './themeManager.js';
   
   let currentTheme = 'dark';
-  let isSystemDefault = true;
-  
+
   onMount(() => {
     currentTheme = themeManager.getTheme();
-    isSystemDefault = themeManager.isSystemDefault();
-    
-    // Listen for theme changes
     themeManager.onChange((newTheme) => {
       currentTheme = newTheme;
-      isSystemDefault = themeManager.isSystemDefault();
     });
   });
   

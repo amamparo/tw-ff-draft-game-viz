@@ -2,17 +2,14 @@
 export async function fetchStockData(entrants, startDate) {
   console.log('Fetching real stock data for entrants:', entrants.map(e => `${e.name} (${e.position} ${e.symbol})`));
   const errors = [];
-  
-  // Convert start date to timestamps - set to 8:00 AM Central Time (top of hour)
-  // Create a date object for 8:00 AM on the start date in Central Time
-  const startDateObj = new Date(startDate + 'T08:00:00-05:00'); // Explicitly set as Central Daylight Time (CDT)
+
+  // Start at 8:00 AM Central Daylight Time (CDT) on the start date
+  const startDateObj = new Date(startDate + 'T08:00:00-05:00');
   const startTimestamp = Math.floor(startDateObj.getTime() / 1000);
-  const endTimestamp = Math.floor(new Date().getTime() / 1000);
-  
-  // Extract unique symbols from entrants
+  const endTimestamp = Math.floor(Date.now() / 1000);
+
   const uniqueSymbols = [...new Set(entrants.map(entrant => entrant.symbol))];
-  
-  // Fetch all symbols in parallel
+
   console.log('Starting parallel requests for all symbols...');
   const fetchPromises = uniqueSymbols.map(async (symbol) => {
     try {
@@ -35,23 +32,20 @@ export async function fetchStockData(entrants, startDate) {
     }
   });
   
-  // Wait for all requests to complete
   const results = await Promise.all(fetchPromises);
-  
-  // Build stockData object from successful results
+
   const stockData = {};
   results.forEach(result => {
     if (result) {
       stockData[result.symbol] = result.data;
     }
   });
-  
-  // If no symbols succeeded, throw an error
+
+  // Only fail outright when every symbol failed
   if (Object.keys(stockData).length === 0) {
     throw new Error(`Failed to fetch data for any symbols. Errors: ${errors.join('; ')}`);
   }
-  
-  // If some symbols failed, log warnings but continue
+
   if (errors.length > 0) {
     console.warn(`Some symbols failed to load: ${errors.join('; ')}`);
   }
@@ -133,46 +127,17 @@ function parseYahooChartData(result) {
     const close = closes[i];
     
     if (close !== null && close !== undefined && !isNaN(close)) {
-      // Yahoo Finance timestamps are in UTC
-      // We'll store them as proper Date objects and let the browser handle timezone display
-      const utcDate = new Date(timestamp * 1000);
-      
-      // Create a formatted string that represents the actual market time
-      // We want to show market hours (Central Time) regardless of user's timezone
-      const utcHours = utcDate.getUTCHours();
-      const utcMinutes = utcDate.getUTCMinutes();
-      
-      // Convert UTC to Central Daylight Time (UTC-5)
-      let centralHours = utcHours - 5;
-      let centralDate = utcDate.getUTCDate();
-      let centralMonth = utcDate.getUTCMonth();
-      let centralYear = utcDate.getUTCFullYear();
-      
-      // Handle day rollover
-      if (centralHours < 0) {
-        centralHours += 24;
-        centralDate -= 1;
-        if (centralDate <= 0) {
-          // Handle month rollover (simplified)
-          centralMonth -= 1;
-          if (centralMonth < 0) {
-            centralMonth = 11;
-            centralYear -= 1;
-          }
-          centralDate = new Date(centralYear, centralMonth + 1, 0).getDate();
-        }
-      }
-      
-      // Format as market time string
-      const year = centralYear;
-      const month = String(centralMonth + 1).padStart(2, '0');
-      const day = String(centralDate).padStart(2, '0');
-      const hour = String(centralHours).padStart(2, '0');
-      const minute = String(utcMinutes).padStart(2, '0');
-      const dateTime = `${year}-${month}-${day}T${hour}:${minute}`;
-      
+      // Yahoo Finance timestamps are UTC; shift 5 hours back to Central Daylight
+      // Time (UTC-5) so labels show market hours regardless of user's timezone
+      const central = new Date((timestamp - 5 * 3600) * 1000);
+      const year = central.getUTCFullYear();
+      const month = String(central.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(central.getUTCDate()).padStart(2, '0');
+      const hour = String(central.getUTCHours()).padStart(2, '0');
+      const minute = String(central.getUTCMinutes()).padStart(2, '0');
+
       data.push({
-        date: dateTime,
+        date: `${year}-${month}-${day}T${hour}:${minute}`,
         price: parseFloat(close.toFixed(2))
       });
     }
@@ -180,7 +145,6 @@ function parseYahooChartData(result) {
   
   return data.sort((a, b) => new Date(a.date) - new Date(b.date));
 }
-
 
 export async function loadConfig() {
   try {
