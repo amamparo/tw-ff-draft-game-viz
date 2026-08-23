@@ -133,25 +133,33 @@
       <div class="updated">{updatedLabel}</div>
     </header>
 
-    {#if missing.length > 0}
-      <div class="warning">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#ec835a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L18 17H2L10 3z"/><path d="M10 8.5v3.5"/><path d="M10 14.6v.2"/></svg>
-        <div>{missing.length} entrant{missing.length === 1 ? '' : 's'} missing data — {missing.map(e => `${e.name} (${e.symbol})`).join(', ')}</div>
+    {#if standings.length === 0}
+      <div class="waiting">
+        <svg width="40" height="40" viewBox="0 0 20 20" fill="none" stroke="#4a4a48" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8v4a4 4 0 0 1-8 0V3z"/><path d="M6 5H3.5a2.5 2.5 0 0 0 2.6 2.5"/><path d="M14 5h2.5a2.5 2.5 0 0 1-2.6 2.5"/><path d="M10 11v3"/><path d="M7 16h6"/></svg>
+        <div class="waiting-title">No data yet</div>
+        <div class="waiting-sub">Standings appear once the market opens.</div>
+      </div>
+    {:else}
+      {#if missing.length > 0}
+        <div class="warning">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#ec835a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L18 17H2L10 3z"/><path d="M10 8.5v3.5"/><path d="M10 14.6v.2"/></svg>
+          <div>{missing.length} entrant{missing.length === 1 ? '' : 's'} missing data — {missing.map(e => `${e.name} (${e.symbol})`).join(', ')}</div>
+        </div>
+      {/if}
+
+      <div class="layout">
+        <Leaderboard {standings} {missing} {sinceLabel}
+          on:highlight={(e) => highlightKey = e.detail} />
+
+        <div class="chart-panel">
+          <div class="chart-panel-header">THE RACE · {contestLabel.toUpperCase()}</div>
+          <div class="chart-area">
+            <StockChart {standings} {highlightKey} />
+          </div>
+          <div class="chart-hint">Hover any row to highlight its line</div>
+        </div>
       </div>
     {/if}
-
-    <div class="layout">
-      <Leaderboard {standings} {missing} {sinceLabel}
-        on:highlight={(e) => highlightKey = e.detail} />
-
-      <div class="chart-panel">
-        <div class="chart-panel-header">THE RACE · {contestLabel.toUpperCase()}</div>
-        <div class="chart-area">
-          <StockChart {standings} {highlightKey} />
-        </div>
-        <div class="chart-hint">Hover any row to highlight its line</div>
-      </div>
-    </div>
   </div>
 {/if}
 
@@ -240,6 +248,29 @@
     font-size: 12px;
     color: #898781;
     white-space: nowrap;
+  }
+
+  .waiting {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .waiting-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #c3c2b7;
+  }
+
+  .waiting-sub {
+    font-size: 13px;
+    color: #898781;
   }
 
   .warning {

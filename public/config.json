@@ -2,8 +2,8 @@
   "entrants": [
     {
       "name": "Aaron",
-      "symbol": "",
-      "position": ""
+      "symbol": "SOXL",
+      "position": "long"
     },
     {
       "name": "Andy",
@@ -17,8 +17,8 @@
     },
     {
       "name": "David G",
-      "symbol": "",
-      "position": ""
+      "symbol": "DIS",
+      "position": "long"
     },
     {
       "name": "David S",
@@ -32,8 +32,8 @@
     },
     {
       "name": "Jalen",
-      "symbol": "",
-      "position": ""
+      "symbol": "CVX",
+      "position": "long"
     },
     {
       "name": "Peter",
@@ -47,10 +47,10 @@
     },
     {
       "name": "Ynabon",
-      "symbol": "",
-      "position": ""
+      "symbol": "SBUX",
+      "position": "long"
     }
   ],
-  "startDate": "2026-08-20",
+  "startDate": "2026-08-23",
   "endDate": "2026-08-28"
 }

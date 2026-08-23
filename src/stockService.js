@@ -44,9 +44,11 @@ export async function fetchStockData(entrants, startDate, endDate) {
     }
   });
 
-  // Only fail outright when every symbol failed
+  // Every symbol empty usually means the contest window hasn't traded yet
+  // (weekend / pre-market); the caller renders a "no data yet" state
   if (Object.keys(stockData).length === 0) {
-    throw new Error(`Failed to fetch data for any symbols. Errors: ${errors.join('; ')}`);
+    console.warn(`No data available for any symbol. Errors: ${errors.join('; ')}`);
+    return stockData;
   }
 
   if (errors.length > 0) {

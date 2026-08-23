@@ -53,7 +53,7 @@ Infrastructure (`infrastructure/lib/infrastructure-stack.ts`, CDK v2, region har
 ## Important Conventions
 
 1. **No Mock Data**: Show real errors to users; never add fallback mock data (see gotcha 4 for the one legacy exception).
-2. **Error Isolation**: Per-symbol try/catch with console logging; the app errors out only if *all* symbols fail.
+2. **Error Isolation**: Per-symbol try/catch with console logging. When *every* symbol comes back empty/failed (typical before the contest window has traded — weekend, pre-market), `fetchStockData` returns `{}` and the app shows a calm "No data yet" state; the red error screen is reserved for config-load failures.
 3. **Minimal UI**: Focus on the data; avoid extra controls or text.
 4. **CORS**: Handled by API Gateway config (plus headers set inside the Lambda) — no frontend workarounds.
 5. **Code simplification pass**: A vendored copy of the official code-simplifier agent lives at `.claude/agents/code-simplifier.md`. A `Stop` hook (`.claude/hooks/simplify-check.sh`, wired in `.claude/settings.json`) blocks task completion once per change-set when source files (`src/`, `infrastructure/lib|bin`, `rollup.config.js`) changed, instructing Claude to run that agent on the changed files. Run it at most once per task; if it reports nothing to simplify, finish. The hook stamps handled states in `.claude/.simplify-stamp` (gitignored) to avoid loops.
