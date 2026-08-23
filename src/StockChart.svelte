@@ -1,236 +1,263 @@
 <script>
   import { onDestroy } from 'svelte';
   import { Chart, registerables } from 'chart.js';
-  import zoomPlugin from 'chartjs-plugin-zoom';
 
-  Chart.register(...registerables, zoomPlugin);
+  Chart.register(...registerables);
 
-  export let config = null;
-  export let stockData = null;
-  export let performanceData = null;
+  export let standings = [];
+  export let highlightKey = null;
+
+  const GRAY = '#4a4a48';
+  const GRAY_HIGHLIGHT = '#e0e0e0';
+  const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   let chartCanvas;
   let chart;
-  let chartData = null;
 
-  // 12 distinct, high-contrast colors optimized for visibility
-  const colors = [
-    '#E31A1C', // Bright Red
-    '#1F78B4', // Blue
-    '#33A02C', // Green
-    '#FF7F00', // Orange
-    '#6A3D9A', // Purple
-    '#FFD700', // Gold
-    '#A6CEE3', // Light Blue
-    '#B2DF8A', // Light Green
-    '#FB9A99', // Pink
-    '#FDBF6F', // Light Orange
-    '#CAB2D6', // Light Purple
-    '#8B4513'  // Brown
-  ];
+  function formatShortPct(value) {
+    const sign = value >= 0 ? '+' : '−';
+    return `${sign}${Math.abs(value).toFixed(1)}%`;
+  }
 
-  function prepareChartData() {
-    if (!config || !stockData || !performanceData) return;
+  function weekdayOf(dateStr) {
+    const y = +dateStr.slice(0, 4);
+    const m = +dateStr.slice(5, 7);
+    const d = +dateStr.slice(8, 10);
+    return DAYS[new Date(y, m - 1, d).getDay()];
+  }
 
-    // Get dates from any available stock data
-    const firstSymbol = Object.keys(stockData)[0];
-    const dates = stockData[firstSymbol]?.map(point => point.date) || [];
+  // "2026-08-27T09:00" -> "THU AUG 27 · 9:00 AM"
+  function formatTooltipTitle(dateStr) {
+    const m = +dateStr.slice(5, 7);
+    const d = +dateStr.slice(8, 10);
+    const h = +dateStr.slice(11, 13);
+    const min = dateStr.slice(14, 16);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${weekdayOf(dateStr).toUpperCase()} ${MONTHS[m - 1]} ${d} · ${h12}:${min} ${ampm}`;
+  }
 
-    const datasets = config.entrants.map((entrant, index) => {
-      const entrantKey = `${entrant.name} (${entrant.position} ${entrant.symbol})`;
-      const positionEmoji = entrant.position === 'long' ? '📈' : '📉';
-      const color = colors[index % colors.length];
+  // Labels come from the longest series so no line is truncated
+  function buildLabels(rows) {
+    let longest = [];
+    rows.forEach(row => {
+      if (row.series.length > longest.length) longest = row.series;
+    });
+    return longest.map(point => point.date);
+  }
 
+  function buildDatasets(rows, labels) {
+    // Rank 1 first: Chart.js paints dataset index 0 topmost
+    const ordered = rows.slice().sort((a, b) => a.rank - b.rank);
+    return ordered.map(row => {
+      // Align each series to the shared labels by date; a symbol missing an
+      // hourly bar gets a null there instead of shifting every later point
+      const byDate = {};
+      row.series.forEach(point => { byDate[point.date] = point.performance; });
+      const top3 = !!row.color;
+      const color = row.color || GRAY;
+      const endLabel = { name: row.name, value: formatShortPct(row.performance) };
       return {
-        label: `${entrant.name} (${entrant.symbol} ${positionEmoji})`,
-        data: performanceData[entrantKey]?.map(point => point.performance) || [],
+        label: row.name,
+        data: labels.map(date => (date in byDate ? byDate[date] : null)),
+        spanGaps: true,
         borderColor: color,
-        backgroundColor: color + '20',
+        backgroundColor: 'transparent',
         fill: false,
-        tension: 0.1
+        tension: 0.1,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHitRadius: 6,
+        borderWidth: 2,
+        rowKey: row.key,
+        baseColor: color,
+        top3,
+        endLabel: top3 ? endLabel : null,
+        baseEndLabel: endLabel,
+        inTooltip: top3
       };
     });
-
-    chartData = {
-      labels: dates,
-      datasets
-    };
   }
 
-  // Evaluated at render time so tick labels adapt if the window is resized
-  function formatDateTick(dateStr) {
-    const date = new Date(dateStr);
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const hour = date.getHours();
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-
-    let displayHour;
-    if (hour === 0) {
-      displayHour = 12;
-    } else if (hour > 12) {
-      displayHour = hour - 12;
-    } else {
-      displayHour = hour;
+  // Draws "Name +x.x%" beside each labeled line's last point
+  const endLabelPlugin = {
+    id: 'endLabels',
+    afterDatasetsDraw(c) {
+      const ctx = c.ctx;
+      const nameFont = '600 13px Archivo, system-ui, sans-serif';
+      const valueFont = '500 13px Archivo, system-ui, sans-serif';
+      ctx.save();
+      ctx.textBaseline = 'middle';
+      const placed = [];
+      c.data.datasets.forEach((ds, i) => {
+        if (!ds.endLabel) return;
+        const meta = c.getDatasetMeta(i);
+        if (meta.hidden || meta.data.length === 0) return;
+        // Anchor to the last real point — trailing nulls have no position
+        let lastIndex = -1;
+        for (let j = ds.data.length - 1; j >= 0; j--) {
+          if (ds.data[j] !== null && ds.data[j] !== undefined) {
+            lastIndex = j;
+            break;
+          }
+        }
+        if (lastIndex < 0) return;
+        const last = meta.data[lastIndex];
+        if (!last) return;
+        let y = last.y;
+        let guard = 0;
+        while (placed.some(p => Math.abs(p - y) < 16) && guard < 40) {
+          y += 4;
+          guard += 1;
+        }
+        placed.push(y);
+        ctx.font = nameFont;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(ds.endLabel.name, last.x + 10, y);
+        const nameWidth = ctx.measureText(ds.endLabel.name).width;
+        ctx.font = valueFont;
+        ctx.fillStyle = '#c3c2b7';
+        ctx.fillText(ds.endLabel.value, last.x + 10 + nameWidth + 6, y);
+      });
+      ctx.restore();
     }
+  };
 
-    if (window.innerWidth < 480) {
-      return `${month}/${day}\n${displayHour}${ampm}`;
+  // Dashed vertical crosshair at the hovered column
+  const crosshairPlugin = {
+    id: 'crosshair',
+    afterDatasetsDraw(c) {
+      const active = c.tooltip && c.tooltip.getActiveElements();
+      if (!active || active.length === 0) return;
+      const x = active[0].element.x;
+      const area = c.chartArea;
+      const ctx = c.ctx;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(195, 194, 183, 0.7)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x, area.top);
+      ctx.lineTo(x, area.bottom);
+      ctx.stroke();
+      ctx.restore();
     }
-    return `${month}/${day} ${displayHour}${ampm}`;
-  }
+  };
 
-  function createChart() {
-    if (!chartCanvas || !chartData) return;
-
-    const isMobile = window.innerWidth < 768;
-
-    let xMaxTicksLimit;
-    if (window.innerWidth < 480) {
-      xMaxTicksLimit = 4;
-    } else if (isMobile) {
-      xMaxTicksLimit = 6;
-    } else {
-      xMaxTicksLimit = 15;
-    }
-
-    const ctx = chartCanvas.getContext('2d');
-    chart = new Chart(ctx, {
+  function createChart(canvas, rows) {
+    const labels = buildLabels(rows);
+    // Per-day labels only fit a contest-length range; longer spans skip ticks
+    const dayCount = new Set(labels.map(l => l.slice(0, 10))).size;
+    const skipTicks = dayCount > 10;
+    return new Chart(canvas.getContext('2d'), {
       type: 'line',
-      data: chartData,
+      data: {
+        labels,
+        datasets: buildDatasets(rows, labels)
+      },
+      plugins: [endLabelPlugin, crosshairPlugin],
       options: {
         responsive: true,
         maintainAspectRatio: false,
         devicePixelRatio: window.devicePixelRatio || 1,
+        layout: {
+          padding: { right: 130 }
+        },
         scales: {
           y: {
             ticks: {
-              color: '#b0b0b0',
-              font: {
-                size: isMobile ? 10 : 12
-              },
-              maxTicksLimit: isMobile ? 8 : 10,
-              callback: function(value) {
-                return value.toFixed(1) + '%';
-              }
+              color: '#898781',
+              font: { size: 11, family: 'Archivo, system-ui, sans-serif' },
+              callback: value => (value > 0 ? '+' : '') + value + '%'
             },
             grid: {
-              color: '#3a3a3a',
-              lineWidth: isMobile ? 0.5 : 1
-            }
+              color: context => context.tick.value === 0 ? '#565550' : '#2c2c2a',
+              lineWidth: context => context.tick.value === 0 ? 1.5 : 1
+            },
+            border: { display: false }
           },
           x: {
             ticks: {
-              color: '#b0b0b0',
-              font: {
-                size: isMobile ? 9 : 11
-              },
-              maxTicksLimit: xMaxTicksLimit,
-              maxRotation: isMobile ? 45 : 0,
-              callback: function(value) {
-                return formatDateTick(this.getLabelForValue(value));
+              color: '#898781',
+              font: { size: 11, family: 'Archivo, system-ui, sans-serif' },
+              autoSkip: skipTicks,
+              maxTicksLimit: skipTicks ? 12 : undefined,
+              maxRotation: 0,
+              // Contest range: label the first point of each day ("Mon 24");
+              // longer ranges: skipped ticks labeled "AUG 21"
+              callback(value, index) {
+                const label = labels[index];
+                if (!label) return '';
+                if (skipTicks) {
+                  return `${MONTHS[+label.slice(5, 7) - 1]} ${+label.slice(8, 10)}`;
+                }
+                if (index > 0 && labels[index - 1].slice(0, 10) === label.slice(0, 10)) return '';
+                return `${weekdayOf(label)} ${+label.slice(8, 10)}`;
               }
             },
-            grid: {
-              color: '#3a3a3a',
-              lineWidth: isMobile ? 0.5 : 1
-            }
+            grid: { display: false },
+            border: { display: false }
           }
         },
         plugins: {
-          legend: {
-            display: true,
-            position: 'bottom',
-            labels: {
-              color: '#e0e0e0',
-              font: {
-                size: isMobile ? 10 : 12
-              },
-              padding: isMobile ? 8 : 10,
-              boxWidth: isMobile ? 12 : 15,
-              usePointStyle: isMobile
-            },
-            maxHeight: isMobile ? 120 : 150
-          },
+          legend: { display: false },
           tooltip: {
-            backgroundColor: 'rgba(42, 42, 42, 0.95)',
-            titleColor: '#e0e0e0',
-            bodyColor: '#e0e0e0',
-            borderColor: '#555',
+            backgroundColor: '#1f1f1e',
+            titleColor: '#898781',
+            bodyColor: '#c3c2b7',
+            borderColor: 'rgba(255,255,255,0.14)',
             borderWidth: 1,
-            cornerRadius: 8,
-            padding: isMobile ? 8 : 12,
+            cornerRadius: 6,
+            padding: 12,
             displayColors: true,
-            bodyFont: {
-              size: isMobile ? 11 : 13
-            },
+            boxWidth: 8,
+            boxHeight: 8,
+            titleFont: { size: 11, family: 'Archivo, system-ui, sans-serif' },
+            bodyFont: { size: 13, family: 'Archivo, system-ui, sans-serif' },
+            filter: item => item.dataset.inTooltip,
+            itemSort: (a, b) => b.parsed.y - a.parsed.y,
             callbacks: {
-              title: function() {
-                return '';
-              },
-              label: function(context) {
-                const performance = context.parsed.y.toFixed(2);
-                const sign = performance >= 0 ? '+' : '';
-                return `${context.dataset.label}: ${sign}${performance}%`;
-              }
-            }
-          },
-          zoom: {
-            zoom: {
-              wheel: {
-                enabled: true,
-                speed: 0.1
-              },
-              pinch: {
-                enabled: true,
-                threshold: 2
-              },
-              mode: 'x',
-              speed: isMobile ? 0.05 : 0.1
-            },
-            pan: {
-              enabled: true,
-              mode: 'x',
-              speed: isMobile ? 0.3 : 0.5,
-              threshold: 5
+              title: items => items.length ? formatTooltipTitle(labels[items[0].dataIndex]) : '',
+              label: context => `${context.dataset.label}  ${formatShortPct(context.parsed.y)}`
             }
           }
         },
         interaction: {
           intersect: false,
-          mode: isMobile ? 'index' : 'nearest',
-          axis: isMobile ? 'x' : undefined
-        },
-        elements: {
-          point: {
-            radius: 0,
-            hoverRadius: isMobile ? 6 : 4,
-            hitRadius: isMobile ? 8 : 6
-          },
-          line: {
-            borderWidth: isMobile ? 2.5 : 2,
-            tension: 0.1
-          }
+          mode: 'index'
         }
       }
     });
   }
 
-  $: if (config && stockData && performanceData) {
-    prepareChartData();
+  function applyHighlight(key) {
+    if (!chart) return;
+    chart.data.datasets.forEach(ds => {
+      const highlighted = ds.rowKey === key;
+      ds.borderColor = highlighted && !ds.top3 ? GRAY_HIGHLIGHT : ds.baseColor;
+      ds.borderWidth = highlighted ? 3 : 2;
+      ds.order = highlighted ? -1 : 0;
+      ds.endLabel = ds.top3 || highlighted ? ds.baseEndLabel : null;
+      ds.inTooltip = ds.top3 || highlighted;
+    });
+    chart.update('none');
   }
 
-  $: if (chartCanvas && chartData) {
-    if (chart) {
-      chart.destroy();
-    }
-    createChart();
+  // Function args keep the reactive dependencies explicit: rebuilding only
+  // tracks canvas/standings, so hover highlights never recreate the chart
+  function rebuild(canvas, rows) {
+    if (!canvas || rows.length === 0) return;
+    if (chart) chart.destroy();
+    chart = createChart(canvas, rows);
+    applyHighlight(highlightKey);
   }
+
+  $: rebuild(chartCanvas, standings);
+  $: applyHighlight(highlightKey);
 
   onDestroy(() => {
-    if (chart) {
-      chart.destroy();
-    }
+    if (chart) chart.destroy();
   });
 </script>
 
@@ -240,35 +267,12 @@
 
 <style>
   .chart-container {
-    width: 100%;
-    height: 100%;
-    padding: 0;
-    margin: 0;
-    box-sizing: border-box;
-    touch-action: manipulation; /* Optimize for touch interactions */
-    -webkit-overflow-scrolling: touch;
+    position: absolute;
+    inset: 0;
   }
 
   canvas {
     width: 100% !important;
     height: 100% !important;
-    touch-action: pan-x; /* Allow horizontal panning only */
-  }
-
-  @media (max-width: 768px) {
-    .chart-container {
-      /* Account for legend space - reduce height to prevent clipping */
-      height: calc(100% - 140px);
-      min-height: calc(100vh - 200px);
-    }
-  }
-
-  /* High-DPI display support */
-  @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-    canvas {
-      /* Chart.js handles high-DPI automatically, but ensure crisp rendering */
-      image-rendering: -webkit-optimize-contrast;
-      image-rendering: crisp-edges;
-    }
   }
 </style>

@@ -29,13 +29,13 @@ curl "https://a3nigzzk33.execute-api.us-east-1.amazonaws.com/prod/yahoo?symbol=A
 
 Data flow (all frontend, no backend state):
 1. `src/main.js` mounts `App.svelte`; the theme singleton `src/themeManager.js` initializes itself on import.
-2. `App.svelte` onMount loads `public/config.json` at runtime (not bundled — config edits need no rebuild): `entrants` array of `{name, symbol, position}` plus `startDate` (YYYY-MM-DD).
-3. `src/stockService.js` dedupes symbols and fetches all of them in parallel (`Promise.all`) from the Lambda proxy: `GET {proxy}/yahoo?symbol=&period1=&period2=&interval=1h`, 15s AbortController timeout per request. The start timestamp is anchored at `T08:00:00-05:00` on `startDate`; `period2` is always now (no caching — every page load refetches).
+2. `App.svelte` onMount loads `public/config.json` at runtime (not bundled — config edits need no rebuild): `entrants` array of `{name, symbol, position}` plus `startDate` and optional `endDate` (YYYY-MM-DD, inclusive — data stops at that day's `T23:59:59-05:00`).
+3. `src/stockService.js` dedupes symbols and fetches all of them in parallel (`Promise.all`) from the Lambda proxy: `GET {proxy}/yahoo?symbol=&period1=&period2=&interval=1h`, 15s AbortController timeout per request. The start timestamp is anchored at `T08:00:00-05:00` on `startDate`; `period2` is now, clamped to `endDate` when set (no caching — every page load refetches).
 4. `parseYahooChartData` converts UTC timestamps to Central time and emits `[{date: "YYYY-MM-DDTHH:MM", price}]` per symbol.
 5. `calculatePerformance` computes per-point percentage vs the first close: longs get the raw value, shorts the negation.
-6. `App.svelte` shows a Leaderboard/Chart toggle (persisted in localStorage `tw-ff-view`); both views receive the same precomputed props — no refetch on toggle.
+6. `App.svelte` renders one combined "Broadcast Dark" screen (no view toggle): `buildStandings` sorts entrants by latest performance into ranked rows (`{key, name, symbol, position, performance, series, rank, color, tint}` — top 3 get colors `#3987e5/#d95926/#199e70`), passed to `Leaderboard.svelte` (standings panel) and `StockChart.svelte` (race chart). Hovering a standings row dispatches `highlight` up to App, which passes `highlightKey` to the chart (line brightens/thickens in place — no chart rebuild). Below 900px the chart panel is CSS-hidden and standings fill the screen.
 
-**Load-bearing string contract:** `calculatePerformance` keys its output by the exact string `` `${name} (${position} ${symbol})` ``. `StockChart.svelte` and `Leaderboard.svelte` both look entries up by rebuilding that string. Change it in one place and the others silently render empty. The *visible* chart legend is a different format: `{name} ({symbol} 📈|📉)`.
+**Load-bearing string contract:** `calculatePerformance` keys its output by the exact string `` `${name} (${position} ${symbol})` ``. `App.svelte#buildStandings` rebuilds that string to look entries up (children consume the prebuilt `standings` rows, keyed by `row.key`). Change the format in one place and the other silently renders empty.
 
 Infrastructure (`infrastructure/lib/infrastructure-stack.ts`, CDK v2, region hardcoded `us-east-1`): Yahoo-proxy Lambda (Node 18, 30s, 256MB) behind API Gateway (`GET /yahoo`, CORS preflight allows all), S3 + CloudFront static hosting at `tw-ff-draft-game-viz.aaronmamparo.com` (imported ACM cert by ARN, Route53 A record), `BucketDeployment` invalidates `/*` on deploy.
 
@@ -45,8 +45,8 @@ Infrastructure (`infrastructure/lib/infrastructure-stack.ts`, CDK v2, region har
 2. **Root `.gitignore` ignores `*.js` globally.** Existing `src/*.js` files are tracked (tracked files ignore the rule), but any *new* `.js` file is silently invisible to git unless force-added or excepted.
 3. **`deploy.sh` uses the wrong flag** `--context requireApproval=never` (sets a context key, does not suppress prompts). The correct form is `--require-approval never`. It also runs `cdk bootstrap` every time.
 4. **`loadConfig()` violates the no-mock-data rule:** on config fetch failure it returns a hardcoded fallback (`stockSymbols: ['AAPL',...]`) whose shape doesn't even match what the app consumes. Known wart — do not add more fallbacks like it.
-5. **Timezone is a fixed UTC-5 offset (CDT).** Labels are an hour off during Central Standard Time. The chart x-axis is a *category* axis using the first symbol's date strings, so all symbols are assumed to share identical hourly timestamps.
-6. **Mobile tuning is frozen at chart creation** (reads `window.innerWidth` once; no resize listener). Breakpoints: 480/768/1024.
+5. **Timezone is a fixed UTC-5 offset (CDT).** Labels are an hour off during Central Standard Time. The chart x-axis is a *category* axis whose labels come from the longest series; each dataset is realigned to those labels by date string (missing hourly bars become `null` + `spanGaps`).
+6. **Mobile is CSS-only**: below 900px `App.svelte` hides the chart panel entirely (standings only, per design). The chart has no `window.innerWidth` reads; Chart.js `responsive: true` handles resizes.
 7. **The theme system is dormant:** `themeManager.js` runs and sets ~13 CSS custom properties (localStorage `ff-theme-preference`), but `ThemeToggle.svelte` is never mounted and no stylesheet consumes the variables — components hard-code dark-theme colors. `src/app.css` (Tailwind directives) is dead: never imported, no Tailwind plugin.
 8. **Toolchain is old:** Svelte 3 + Rollup 2 + terser 7, plain JS, no transpiler. Keep syntax conservative and no Svelte 5 idioms.
 

@@ -1,29 +1,29 @@
 {
   "entrants": [
     {
-      "name": "Devin",
-      "symbol": "DVN",
+      "name": "Aaron",
+      "symbol": "",
+      "position": ""
+    },
+    {
+      "name": "Andy",
+      "symbol": "A",
       "position": "long"
     },
     {
-      "name": "Max",
-      "symbol": "DJIA",
-      "position": "long"
-    },
-    {
-      "name": "David S",
-      "symbol": "ETHA",
+      "name": "Zhang",
+      "symbol": "DKS",
       "position": "long"
     },
     {
       "name": "David G",
-      "symbol": "TEM",
-      "position": "long"
+      "symbol": "",
+      "position": ""
     },
     {
-      "name": "Aaron",
-      "symbol": "ZS",
-      "position": "short"
+      "name": "David S",
+      "symbol": "MRNA",
+      "position": "long"
     },
     {
       "name": "Eddie",
@@ -31,35 +31,26 @@
       "position": "long"
     },
     {
-      "name": "AJ",
-      "symbol": "LIXT",
-      "position": "long"
+      "name": "Jalen",
+      "symbol": "",
+      "position": ""
     },
     {
-      "name": "Dylan",
-      "symbol": "CUK",
-      "position": "long"
+      "name": "Peter",
+      "symbol": "MRVL",
+      "position": "short"
     },
     {
-      "name": "Zhang",
-      "symbol": "WMT",
+      "name": "Ron",
+      "symbol": "USDE",
       "position": "long"
     },
     {
       "name": "Ynabon",
-      "symbol": "SNOW",
-      "position": "long"
-    },
-    {
-      "name": "Peter",
-      "symbol": "CHWY",
-      "position": "long"
-    },
-    {
-      "name": "John",
-      "symbol": "TSLA",
-      "position": "long"
+      "symbol": "",
+      "position": ""
     }
   ],
-  "startDate": "2025-08-21"
+  "startDate": "2026-08-20",
+  "endDate": "2026-08-28"
 }

@@ -1,308 +1,226 @@
 <script>
-  export let performanceData = {};
-  export let entrants = [];
-  export let stockData = {};
-  
-  function getCurrentPerformance() {
-    const performances = [];
+  import { createEventDispatcher } from 'svelte';
 
-    entrants.forEach(entrant => {
-      const entrantKey = `${entrant.name} (${entrant.position} ${entrant.symbol})`;
-      const data = performanceData[entrantKey];
+  export let standings = [];
+  export let missing = [];
+  export let sinceLabel = '';
 
-      if (data && data.length > 0) {
-        const symbolData = stockData[entrant.symbol];
-        const currentPrice = symbolData && symbolData.length > 0
-          ? symbolData[symbolData.length - 1].price
-          : null;
+  const dispatch = createEventDispatcher();
 
-        performances.push({
-          name: entrant.name,
-          symbol: entrant.symbol,
-          position: entrant.position,
-          performance: data[data.length - 1].performance,
-          currentPrice
-        });
-      }
-    });
-
-    // Sort by performance descending, then rank
-    performances.sort((a, b) => b.performance - a.performance);
-    performances.forEach((p, i) => {
-      p.rank = i + 1;
-    });
-
-    return performances;
-  }
-  
-  $: leaderboardData = getCurrentPerformance();
-  
   function formatPerformance(value) {
-    const sign = value >= 0 ? '+' : '';
-    const color = value >= 0 ? '#4ade80' : '#f87171';
-    return {
-      text: `${sign}${value.toFixed(2)}%`,
-      color
-    };
+    const sign = value >= 0 ? '+' : '−';
+    return `${sign}${Math.abs(value).toFixed(2)}%`;
   }
 
-  function formatPrice(price) {
-    return price ? `$${price.toFixed(2)}` : 'N/A';
+  function positionLabel(position) {
+    return position === 'short' ? 'SHORT' : 'LONG';
   }
 
-  function getPositionEmoji(position) {
-    return position === 'long' ? '📈' : '📉';
-  }
-
-  function getMedalEmoji(rank) {
-    switch(rank) {
-      case 1: return '🥇';
-      case 2: return '🥈';
-      case 3: return '🥉';
-      default: return '';
+  // Downsample a performance series into a 64x20 sparkline polyline
+  function sparkPoints(series) {
+    if (!series || series.length < 2) return '';
+    const step = Math.max(1, Math.floor(series.length / 32));
+    const values = [];
+    for (let i = 0; i < series.length; i += step) {
+      values.push(series[i].performance);
     }
+    const lastValue = series[series.length - 1].performance;
+    if (values[values.length - 1] !== lastValue) {
+      values.push(lastValue);
+    }
+    const min = Math.min(...values);
+    let max = Math.max(...values);
+    if (max - min < 1e-9) max = min + 1;
+    return values.map((v, i) => {
+      const x = (i / (values.length - 1)) * 64;
+      const y = 18 - ((v - min) / (max - min)) * 16;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
   }
 </script>
 
-<div class="leaderboard-container">
-  <div class="table-wrapper">
-    <table class="leaderboard-table">
-      <thead>
-        <tr>
-          <th>Rank</th>
-          <th>Name</th>
-          <th>Symbol</th>
-          <th>Position</th>
-          <th class="perf-header">Performance</th>
-          <th class="price-col">Current Price</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each leaderboardData as entry}
-          {@const perf = formatPerformance(entry.performance)}
-          <tr class="entry-row" class:podium={entry.rank <= 3}>
-            <td class="rank-cell">
-              <span class="rank-number">{entry.rank}</span>
-              <span class="medal desktop-only">{getMedalEmoji(entry.rank)}</span>
-            </td>
-            <td class="name-cell">
-              {entry.name}
-            </td>
-            <td class="symbol-cell">
-              <span class="symbol-badge">{entry.symbol}</span>
-            </td>
-            <td class="position-cell">
-              <span class="position-badge {entry.position}">
-                {getPositionEmoji(entry.position)} {entry.position}
-              </span>
-            </td>
-            <td class="performance-cell">
-              <span class="performance-value" style="color: {perf.color}">
-                {perf.text}
-              </span>
-            </td>
-            <td class="price-cell price-col">
-              {formatPrice(entry.currentPrice)}
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
+<div class="panel">
+  <div class="panel-header">
+    <div class="panel-title">STANDINGS</div>
+    <div class="panel-sub">{sinceLabel}</div>
+  </div>
+  <div class="rows">
+    {#each standings as row (row.key)}
+      <div
+        class="row"
+        style="border-left-color: {row.color || 'transparent'}; --tint: {row.tint || 'transparent'};"
+        on:mouseenter={() => dispatch('highlight', row.key)}
+        on:mouseleave={() => dispatch('highlight', null)}
+      >
+        <div class="rank" class:top={row.rank <= 3}>{row.rank}</div>
+        <div class="who">
+          <div class="name">{row.name}</div>
+          <div class="ticker">{row.symbol}</div>
+          <div class="tag" class:short={row.position === 'short'}>{positionLabel(row.position)}</div>
+        </div>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20" fill="none">
+          <polyline points={sparkPoints(row.series)} stroke="#898781" stroke-opacity="0.6" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+        </svg>
+        <div class="pct" class:down={row.performance < 0}>{formatPerformance(row.performance)}</div>
+      </div>
+    {/each}
+    {#each missing as entrant (entrant.symbol + entrant.name)}
+      <div class="row nodata">
+        <div class="rank">—</div>
+        <div class="who">
+          <div class="name">{entrant.name}</div>
+          <div class="ticker">{entrant.symbol}</div>
+          <div class="tag" class:short={entrant.position === 'short'}>{positionLabel(entrant.position)}</div>
+        </div>
+        <div class="nodata-note">no data</div>
+        <div class="pct">—</div>
+      </div>
+    {/each}
   </div>
 </div>
 
 <style>
-  .leaderboard-container {
-    width: 100%;
-    height: 100%;
-    background-color: #1a1a1a;
-    color: #e0e0e0;
-    padding: 20px;
-    box-sizing: border-box;
-    overflow-y: auto;
-  }
-  
-  .table-wrapper {
-    max-width: 1200px;
-    margin: 0 auto;
-    background-color: #2a2a2a;
-    border-radius: 8px;
+  .panel {
+    background: #1a1a19;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    min-height: 0;
   }
-  
-  .leaderboard-table {
-    width: 100%;
-    border-collapse: collapse;
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+    flex-shrink: 0;
   }
-  
-  thead {
-    background-color: #3a3a3a;
-  }
-  
-  th {
-    padding: 16px 12px;
-    text-align: left;
+
+  .panel-title {
+    font-size: 11px;
     font-weight: 600;
-    color: #f0f0f0;
-    border-bottom: 2px solid #4a4a4a;
+    letter-spacing: 0.10em;
+    color: #898781;
   }
-  
-  th:first-child {
-    text-align: center;
+
+  .panel-sub {
+    font-size: 11px;
+    color: #898781;
   }
-  
-  th:nth-child(5), th:nth-child(6) {
-    text-align: right;
+
+  .rows {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    min-height: 0;
   }
-  
-  .entry-row {
-    border-bottom: 1px solid #3a3a3a;
-    transition: background-color 0.2s;
+
+  .row {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) 68px 76px;
+    align-items: center;
+    column-gap: 8px;
+    min-height: 46px;
+    padding: 0 16px 0 13px;
+    border-left: 3px solid transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
   }
-  
-  .entry-row:hover {
-    background-color: #333;
+
+  .row:last-child {
+    border-bottom: none;
   }
-  
-  .entry-row.podium {
-    background-color: #2d3748;
+
+  .row {
+    background-color: var(--tint, transparent);
   }
-  
-  .entry-row.podium:hover {
-    background-color: #374151;
+
+  /* Layered gradient so hover brightens top-3 rows without losing their tint */
+  .row:not(.nodata):hover {
+    background-image: linear-gradient(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.04));
   }
-  
-  td {
-    padding: 14px 12px;
+
+  .row.nodata {
+    opacity: 0.55;
   }
-  
-  .rank-cell {
-    text-align: center;
-    font-weight: 600;
-  }
-  
-  .rank-number {
-    font-size: 16px;
-  }
-  
-  .medal {
-    margin-left: 8px;
-    font-size: 18px;
-  }
-  
-  .name-cell {
-    font-weight: 500;
-    font-size: 15px;
-  }
-  
-  .symbol-badge {
-    background-color: #4a4a4a;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-family: monospace;
-    font-weight: 600;
+
+  .rank {
     font-size: 13px;
-  }
-  
-  .position-badge {
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 500;
-    text-transform: uppercase;
-  }
-  
-  .position-badge.long {
-    background-color: #065f46;
-    color: #10b981;
-  }
-  
-  .position-badge.short {
-    background-color: #7f1d1d;
-    color: #f87171;
-  }
-  
-  .performance-cell {
-    text-align: right;
-  }
-  
-  .performance-value {
-    font-family: monospace;
     font-weight: 600;
-    font-size: 15px;
+    color: #c3c2b7;
   }
-  
-  .price-cell {
+
+  .rank.top {
+    color: #ffffff;
+  }
+
+  .nodata .rank, .nodata .name, .nodata .ticker, .nodata .pct {
+    color: #898781;
+  }
+
+  .who {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ticker {
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+    color: #c3c2b7;
+    background: #2c2c2a;
+    border-radius: 4px;
+    padding: 1px 5px;
+    flex-shrink: 0;
+  }
+
+  .tag {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: #898781;
+    flex-shrink: 0;
+  }
+
+  .tag.short {
+    color: #c3c2b7;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 3px;
+    padding: 1px 4px;
+  }
+
+  .spark {
+    justify-self: end;
+  }
+
+  .pct {
+    font-size: 13px;
+    font-weight: 600;
     text-align: right;
-    font-family: monospace;
-    color: #d1d5db;
+    color: #0ca30c;
+    font-variant-numeric: tabular-nums;
   }
-  
-  .desktop-only {
-    display: inline;
+
+  .pct.down {
+    color: #e66767;
   }
-  
-  /* Mobile responsive */
-  @media (max-width: 768px) {
-    .leaderboard-container {
-      padding: 10px;
-    }
-    
-    .price-col {
-      display: none;
-    }
-    
-    .desktop-only {
-      display: none;
-    }
-    
-    .perf-header::after {
-      content: "Perf.";
-    }
-    
-    .perf-header {
-      font-size: 0;
-    }
-    
-    th, td {
-      padding: 10px 8px;
-    }
-    
-    th {
-      font-size: 13px;
-    }
-    
-    .name-cell {
-      font-size: 14px;
-    }
-    
-    .symbol-badge {
-      font-size: 11px;
-      padding: 3px 6px;
-    }
-    
-    .position-badge {
-      font-size: 10px;
-      padding: 3px 6px;
-    }
-    
-    .performance-value {
-      font-size: 14px;
-    }
-  }
-  
-  @media (max-width: 480px) {
-    .leaderboard-container {
-      padding: 5px;
-    }
-    
-    th:nth-child(4)::after {
-      content: "Pos.";
-    }
-    
-    th:nth-child(4) {
-      font-size: 0;
-    }
+
+  .nodata-note {
+    font-size: 11px;
+    color: #898781;
+    justify-self: end;
   }
 </style>

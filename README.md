@@ -45,7 +45,8 @@ Edit `public/config.json` to configure contest participants:
     {"name": "Trader 2", "symbol": "TSLA", "position": "short"},
     {"name": "Trader 3", "symbol": "MSFT", "position": "long"}
   ],
-  "startDate": "2025-08-16"
+  "startDate": "2025-08-16",
+  "endDate": "2025-08-22"
 }
 ```
 
@@ -53,6 +54,7 @@ Edit `public/config.json` to configure contest participants:
 - **symbol**: Stock ticker symbol
 - **position**: Either "long" or "short"
 - **startDate**: Baseline date for performance calculation (YYYY-MM-DD format)
+- **endDate** (optional): Last day of the contest (YYYY-MM-DD, inclusive) — data stops at the end of this day (11:59 PM Central); omit to keep updating through the present
 
 ## Development
 

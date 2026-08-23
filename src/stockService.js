@@ -1,12 +1,15 @@
 // Stock data service using Yahoo Finance v8 chart API
-export async function fetchStockData(entrants, startDate) {
+export async function fetchStockData(entrants, startDate, endDate) {
   console.log('Fetching real stock data for entrants:', entrants.map(e => `${e.name} (${e.position} ${e.symbol})`));
   const errors = [];
 
   // Start at 8:00 AM Central Daylight Time (CDT) on the start date
   const startDateObj = new Date(startDate + 'T08:00:00-05:00');
   const startTimestamp = Math.floor(startDateObj.getTime() / 1000);
-  const endTimestamp = Math.floor(Date.now() / 1000);
+  // Clamp to end of the end date (inclusive) so the contest freezes there
+  const nowMs = Date.now();
+  const endMs = endDate ? Math.min(nowMs, new Date(endDate + 'T23:59:59-05:00').getTime()) : nowMs;
+  const endTimestamp = Math.floor(endMs / 1000);
 
   const uniqueSymbols = [...new Set(entrants.map(entrant => entrant.symbol))];
 
