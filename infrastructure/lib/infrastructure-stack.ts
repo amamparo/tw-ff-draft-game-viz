@@ -14,7 +14,7 @@ export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const domainName = 'tw-ff-draft-game-viz.aaronmamparo.com';
+    const domainName = 'draft-order-gauntlet.aaronmamparo.com';
     const rootDomain = 'aaronmamparo.com';
 
     const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {

@@ -37,7 +37,7 @@ Data flow (all frontend, no backend state):
 
 **Load-bearing string contract:** `calculatePerformance` keys its output by the exact string `` `${name} (${position} ${symbol})` ``. `App.svelte#buildStandings` rebuilds that string to look entries up (children consume the prebuilt `standings` rows, keyed by `row.key`). Change the format in one place and the other silently renders empty.
 
-Infrastructure (`infrastructure/lib/infrastructure-stack.ts`, CDK v2, region hardcoded `us-east-1`): Yahoo-proxy Lambda (Node 18, 30s, 256MB) behind API Gateway (`GET /yahoo`, CORS preflight allows all), S3 + CloudFront static hosting at `tw-ff-draft-game-viz.aaronmamparo.com` (imported ACM cert by ARN, Route53 A record), `BucketDeployment` invalidates `/*` on deploy.
+Infrastructure (`infrastructure/lib/infrastructure-stack.ts`, CDK v2, region hardcoded `us-east-1`): Yahoo-proxy Lambda (Node 18, 30s, 256MB) behind API Gateway (`GET /yahoo`, CORS preflight allows all), S3 + CloudFront static hosting at `draft-order-gauntlet.aaronmamparo.com` (imported ACM cert by ARN, Route53 A record), `BucketDeployment` invalidates `/*` on deploy.
 
 ## Critical Gotchas
 
