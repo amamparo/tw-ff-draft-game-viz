@@ -14,7 +14,7 @@ export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const domainName = 'draft-order-gauntlet.aaronmamparo.com';
+    const domainName = 'draft-order.aaronmamparo.com';
     const rootDomain = 'aaronmamparo.com';
 
     const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
@@ -29,7 +29,7 @@ export class InfrastructureStack extends cdk.Stack {
     );
 
     const yahooProxyFunction = new lambda.Function(this, 'YahooProxyFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'yahoo-proxy.handler',
       code: lambda.Code.fromAsset('lambda'),
       timeout: cdk.Duration.seconds(30),
@@ -80,7 +80,9 @@ export class InfrastructureStack extends cdk.Stack {
       ],
     });
 
-    new route53.ARecord(this, 'AliasRecord', {
+    // Fresh logical ID ('SiteAliasRecord'): the old 'AliasRecord' CF state
+    // pointed at a hand-deleted record and was dropped under RETAIN.
+    new route53.ARecord(this, 'SiteAliasRecord', {
       zone: hostedZone,
       recordName: domainName,
       target: route53.RecordTarget.fromAlias(

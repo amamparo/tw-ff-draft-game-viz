@@ -2,7 +2,7 @@
 
 A full-screen, real-time stock performance visualization dashboard for tracking trading contest participants with long/short positions. Built with Svelte and deployed on AWS.
 
-Live demo: [https://draft-order-gauntlet.aaronmamparo.com](https://draft-order-gauntlet.aaronmamparo.com)
+Live demo: [https://draft-order.aaronmamparo.com](https://draft-order.aaronmamparo.com)
 
 ## Features
 

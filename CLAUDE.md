@@ -37,11 +37,11 @@ Data flow (all frontend, no backend state):
 
 **Load-bearing string contract:** `calculatePerformance` keys its output by the exact string `` `${name} (${position} ${symbol})` ``. `App.svelte#buildStandings` rebuilds that string to look entries up (children consume the prebuilt `standings` rows, keyed by `row.key`). Change the format in one place and the other silently renders empty.
 
-Infrastructure (`infrastructure/lib/infrastructure-stack.ts`, CDK v2, region hardcoded `us-east-1`): Yahoo-proxy Lambda (Node 18, 30s, 256MB) behind API Gateway (`GET /yahoo`, CORS preflight allows all), S3 + CloudFront static hosting at `draft-order-gauntlet.aaronmamparo.com` (imported ACM cert by ARN, Route53 A record), `BucketDeployment` invalidates `/*` on deploy.
+Infrastructure (`infrastructure/lib/infrastructure-stack.ts`, CDK v2, region hardcoded `us-east-1`): Yahoo-proxy Lambda (Node 22, 30s, 256MB) behind API Gateway (`GET /yahoo`, CORS preflight allows all), S3 + CloudFront static hosting at `draft-order.aaronmamparo.com` (imported ACM cert by ARN, Route53 A record), `BucketDeployment` invalidates `/*` on deploy.
 
 ## Critical Gotchas
 
-1. **The Lambda source is missing from the repo.** The stack references `Code.fromAsset('lambda')` with handler `yahoo-proxy.handler`, but `infrastructure/lambda/yahoo-proxy.js` does not exist on disk and was never committed (`infrastructure/.gitignore`'s `*.js` rule overrides the root `.gitignore`'s `!infrastructure/lambda/*.js` carve-out). `cdk synth`/`deploy` fail from a fresh clone. The only copy of the handler is the deployed Lambda — recover it from AWS (`aws lambda get-function`) and fix the nested .gitignore before any redeploy.
+1. **The Lambda source was once missing from the repo** (resolved 2026-08-24): `infrastructure/lambda/yahoo-proxy.js` was recovered from the deployed Lambda and committed, and `infrastructure/.gitignore` gained a `!lambda/*.js` carve-out so it stays tracked. If the file ever goes missing again, recover it from AWS (`aws lambda get-function`).
 2. **Root `.gitignore` ignores `*.js` globally.** Existing `src/*.js` files are tracked (tracked files ignore the rule), but any *new* `.js` file is silently invisible to git unless force-added or excepted.
 3. **`deploy.sh` uses the wrong flag** `--context requireApproval=never` (sets a context key, does not suppress prompts). The correct form is `--require-approval never`. It also runs `cdk bootstrap` every time.
 4. **`loadConfig()` violates the no-mock-data rule:** on config fetch failure it returns a hardcoded fallback (`stockSymbols: ['AAPL',...]`) whose shape doesn't even match what the app consumes. Known wart — do not add more fallbacks like it.
@@ -62,9 +62,9 @@ Infrastructure (`infrastructure/lib/infrastructure-stack.ts`, CDK v2, region har
 
 **IMPORTANT**: Do NOT deploy automatically. Build locally only; the human deploys unless the prompt explicitly asks.
 
-1. Build order: frontend `npm run build` first, then `cd infrastructure && npx cdk deploy --require-approval never` (currently blocked by gotcha 1).
+1. Build order: frontend `npm run build` first, then `cd infrastructure && npx cdk deploy --require-approval never`.
 2. CloudFront invalidation is automatic via the CDK `BucketDeployment`.
-3. AWS credentials are needed even for synth (`HostedZone.fromLookup`; lookup cached in `infrastructure/cdk.context.json`). Lambda runtime `NODEJS_18_X` is past AWS end-of-support — expect to bump it on the next redeploy.
+3. AWS credentials are needed even for synth (`HostedZone.fromLookup`; lookup cached in `infrastructure/cdk.context.json`). Lambda runtime is `NODEJS_22_X` (bumped from 18 on 2026-08-24 — AWS blocks updates to Node 18 functions).
 
 ## Common Tasks
 

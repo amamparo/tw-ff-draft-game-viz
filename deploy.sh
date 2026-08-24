@@ -17,4 +17,4 @@ npx cdk bootstrap --context requireApproval=never
 npx cdk deploy --context requireApproval=never
 
 echo "✅ Deployment complete!"
-echo "🌐 Your app should be available at: https://draft-order-gauntlet.aaronmamparo.com"
+echo "🌐 Your app should be available at: https://draft-order.aaronmamparo.com"
